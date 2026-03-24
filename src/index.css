@@ -1,0 +1,210 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Source+Sans+3:wght@400;500;600&display=swap');
+
+@layer base {
+  :root {
+    /* Medical-grade clean aesthetic */
+    --background: 210 20% 98%;
+    --foreground: 220 20% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 10%;
+
+    /* Medical teal-blue - trustworthy, calm */
+    --primary: 195 70% 40%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 15% 95%;
+    --secondary-foreground: 220 20% 20%;
+
+    --muted: 210 15% 93%;
+    --muted-foreground: 220 10% 45%;
+
+    --accent: 195 60% 95%;
+    --accent-foreground: 195 70% 30%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 210 20% 90%;
+    --input: 210 20% 90%;
+    --ring: 195 70% 40%;
+
+    --radius: 0.5rem;
+
+    /* Risk level colors */
+    --risk-low: 142 70% 45%;
+    --risk-low-bg: 142 70% 95%;
+    --risk-moderate: 38 95% 50%;
+    --risk-moderate-bg: 38 95% 95%;
+    --risk-high: 0 72% 51%;
+    --risk-high-bg: 0 72% 96%;
+
+    /* Quality indicators */
+    --quality-good: 142 70% 45%;
+    --quality-fair: 38 95% 50%;
+    --quality-poor: 0 72% 51%;
+
+    /* Chart colors */
+    --chart-primary: 195 70% 50%;
+    --chart-secondary: 195 40% 70%;
+    --chart-accent: 280 60% 60%;
+    --chart-muted: 210 15% 70%;
+
+    /* Sidebar */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 220 20% 30%;
+    --sidebar-primary: 195 70% 40%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 195 60% 95%;
+    --sidebar-accent-foreground: 195 70% 30%;
+    --sidebar-border: 210 20% 92%;
+    --sidebar-ring: 195 70% 40%;
+  }
+
+  .dark {
+    --background: 220 20% 8%;
+    --foreground: 210 20% 95%;
+
+    --card: 220 20% 12%;
+    --card-foreground: 210 20% 95%;
+
+    --popover: 220 20% 12%;
+    --popover-foreground: 210 20% 95%;
+
+    --primary: 195 70% 50%;
+    --primary-foreground: 220 20% 8%;
+
+    --secondary: 220 15% 18%;
+    --secondary-foreground: 210 20% 90%;
+
+    --muted: 220 15% 20%;
+    --muted-foreground: 210 10% 60%;
+
+    --accent: 195 50% 20%;
+    --accent-foreground: 195 70% 70%;
+
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 15% 20%;
+    --input: 220 15% 20%;
+    --ring: 195 70% 50%;
+
+    --sidebar-background: 220 20% 10%;
+    --sidebar-foreground: 210 20% 85%;
+    --sidebar-primary: 195 70% 50%;
+    --sidebar-primary-foreground: 220 20% 8%;
+    --sidebar-accent: 195 50% 18%;
+    --sidebar-accent-foreground: 195 70% 70%;
+    --sidebar-border: 220 15% 18%;
+    --sidebar-ring: 195 70% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    font-family: 'Inter', 'Source Sans 3', system-ui, sans-serif;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+}
+
+@layer components {
+  /* Risk badge styles */
+  .risk-badge-low {
+    @apply bg-[hsl(var(--risk-low-bg))] text-[hsl(var(--risk-low))] border border-[hsl(var(--risk-low)/0.3)];
+  }
+
+  .risk-badge-moderate {
+    @apply bg-[hsl(var(--risk-moderate-bg))] text-[hsl(var(--risk-moderate))] border border-[hsl(var(--risk-moderate)/0.3)];
+  }
+
+  .risk-badge-high {
+    @apply bg-[hsl(var(--risk-high-bg))] text-[hsl(var(--risk-high))] border border-[hsl(var(--risk-high)/0.3)];
+  }
+
+  /* Clinical card style */
+  .clinical-card {
+    @apply bg-card rounded-lg border border-border shadow-sm p-4 transition-shadow hover:shadow-md;
+  }
+
+  /* Stats card */
+  .stats-card {
+    @apply bg-card rounded-xl border border-border p-5 shadow-sm;
+  }
+
+  /* Data table row hover */
+  .data-row {
+    @apply hover:bg-muted/50 transition-colors cursor-pointer;
+  }
+
+  /* Upload dropzone */
+  .upload-zone {
+    @apply border-2 border-dashed border-border rounded-xl p-8 text-center transition-all hover:border-primary hover:bg-accent/30;
+  }
+
+  .upload-zone-active {
+    @apply border-primary bg-accent/50;
+  }
+
+  /* Quality meter */
+  .quality-bar {
+    @apply h-2 rounded-full bg-muted overflow-hidden;
+  }
+
+  /* Step indicator */
+  .step-active {
+    @apply bg-primary text-primary-foreground;
+  }
+
+  .step-complete {
+    @apply bg-[hsl(var(--risk-low))] text-white;
+  }
+
+  .step-pending {
+    @apply bg-muted text-muted-foreground;
+  }
+}
+
+@layer utilities {
+  .text-risk-low {
+    color: hsl(var(--risk-low));
+  }
+
+  .text-risk-moderate {
+    color: hsl(var(--risk-moderate));
+  }
+
+  .text-risk-high {
+    color: hsl(var(--risk-high));
+  }
+
+  .bg-risk-low {
+    background-color: hsl(var(--risk-low));
+  }
+
+  .bg-risk-moderate {
+    background-color: hsl(var(--risk-moderate));
+  }
+
+  .bg-risk-high {
+    background-color: hsl(var(--risk-high));
+  }
+}
