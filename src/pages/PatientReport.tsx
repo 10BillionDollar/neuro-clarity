@@ -456,7 +456,7 @@ const PatientReport = () => {
               </div>
 
               {/* Plot Images */}
-              {graphData?.plots && (
+              {/* {graphData?.plots && (
                 <div className="rounded-lg border border-border p-4">
                   <h3 className="mb-4 font-semibold text-foreground">EEG Analysis Plots</h3>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -472,7 +472,7 @@ const PatientReport = () => {
                     ))}
                   </div>
                 </div>
-              )}
+              )} */}
             </CollapsibleContent>
           </div>
         </Collapsible>
