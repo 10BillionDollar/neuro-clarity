@@ -290,7 +290,6 @@ const Evidence = () => {
               </div>
             </AccordionContent>
           </AccordionItem>
-
           {/* Regulatory Compliance */}
           <AccordionItem value="regulatory" className="clinical-card border-none">
             <AccordionTrigger className="hover:no-underline">

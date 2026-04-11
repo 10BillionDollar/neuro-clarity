@@ -15,6 +15,8 @@ import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import Login from "./app/Login";
 import Signup from "./app/Signup";
+import Patients from "./pages/Patients";
+import PatientHistory from "./pages/PatientHistory";
 
 const queryClient = new QueryClient();
 
@@ -89,6 +91,22 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Settings />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/patients"
+              element={
+                <ProtectedRoute>
+                  <Patients />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/patient-history/:patient_code"
+              element={
+                <ProtectedRoute>
+                  <PatientHistory />
                 </ProtectedRoute>
               }
             />

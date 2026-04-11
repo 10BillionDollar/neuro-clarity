@@ -1,10 +1,26 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { 
   Upload as UploadIcon, 
   FileText, 
@@ -13,15 +29,24 @@ import {
   AlertTriangle,
   AlertCircle,
   Loader2,
-  ArrowRight
+  ArrowRight,
+  Plus
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fetchWithAuth } from "@/lib/fetchWithAuth";
 import { useNavigate } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
 import { API_BASE_URL } from "@/app/config";
+import { getPatientsDb, createPatient, PatientPayload } from "@/app/patients";
 
 type Step = 1 | 2 | 3;
+
+interface Patient {
+  patient_code: string;
+  name: string;
+  age: number;
+  gender: string;
+}
 
 interface QualityResult {
   overallScore: number;
@@ -33,12 +58,15 @@ interface QualityResult {
 const Upload = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState<Step>(1);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [selectedPatientCode, setSelectedPatientCode] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [qualityResult, setQualityResult] = useState<QualityResult | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedFileId, setUploadedFileId] = useState<string | null>(null);
+  const [isAddPatientModalOpen, setIsAddPatientModalOpen] = useState(false);
   
   const [patientInfo, setPatientInfo] = useState({
     name: "",
@@ -50,7 +78,120 @@ const Upload = () => {
     mmseScore: "",
   });
 
-  const handleDrop = (e: React.DragEvent) => {
+  const [newPatient, setNewPatient] = useState({
+    name: "",
+    age: "",
+    gender: "",
+    patient_code: "",
+  });
+
+  useEffect(() => {
+    const fetchPatients = async () => {
+      try {
+        const data = await getPatientsDb();
+        const list = Array.isArray(data) ? data : data.patients ?? [];
+        setPatients(list);
+      } catch (error) {
+        console.error('Error fetching patients:', error);
+      }
+    };
+    fetchPatients();
+  }, []);
+
+  const handlePatientSelect = (value: string) => {
+    if (value === "add-new") {
+      setIsAddPatientModalOpen(true);
+    } else {
+      setSelectedPatientCode(value);
+      const patient = patients.find(p => p.patient_code === value);
+      if (patient) {
+        setPatientInfo({
+          name: patient.name,
+          age: patient.age.toString(),
+          gender: patient.gender,
+          id: patient.patient_code,
+          notes: "",
+          mocaScore: "",
+          mmseScore: "",
+        });
+      }
+    }
+  };
+
+  const handleAddPatient = async () => {
+    if (!newPatient.name || !newPatient.age || !newPatient.gender || !newPatient.patient_code) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const payload: PatientPayload = {
+        hospital_id: 1, // Assuming default hospital_id
+        patient_code: newPatient.patient_code,
+        name: newPatient.name,
+        age: parseInt(newPatient.age),
+        gender: newPatient.gender,
+      };
+
+      await createPatient(payload);
+
+      // Refresh patients list
+      const data = await getPatientsDb();
+      const list = Array.isArray(data) ? data : data.patients ?? [];
+      setPatients(list);
+
+      // Select the new patient
+      setSelectedPatientCode(newPatient.patient_code);
+      setPatientInfo({
+        name: newPatient.name,
+        age: newPatient.age,
+        gender: newPatient.gender,
+        id: newPatient.patient_code,
+        notes: "",
+        mocaScore: "",
+        mmseScore: "",
+      });
+
+      // Close modal and reset form
+      setIsAddPatientModalOpen(false);
+      setNewPatient({
+        name: "",
+        age: "",
+        gender: "",
+        patient_code: "",
+      });
+
+      toast({
+        title: "Patient Added",
+        description: "New patient has been added successfully.",
+      });
+    } catch (error) {
+      console.error('Error adding patient:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add patient. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleNextFromPatientSelect = () => {
+    if (selectedPatientCode) {
+      setCurrentStep(2);
+    } else {
+      toast({
+        title: "Select Patient",
+        description: "Please select a patient first.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragging(false);
     const droppedFile = e.dataTransfer.files[0];
@@ -75,8 +216,6 @@ const Upload = () => {
   const runQualityCheck = async () => {
     if (!uploadedFileId) return;
 
-    // Move to Quality Check step immediately so the user sees the spinner
-    setCurrentStep(3);
     setIsAnalyzing(true);
 
     try {
@@ -162,7 +301,7 @@ const Upload = () => {
         description: "File uploaded successfully.",
       });
 
-      setCurrentStep(2);
+      setCurrentStep(3);
     } catch (error) {
       toast({
         title: "Upload Failed",
@@ -194,13 +333,85 @@ const Upload = () => {
   };
 
   const steps = [
-    { number: 1, title: "Upload EEG", icon: UploadIcon },
-    { number: 2, title: "Patient Info", icon: User },
-    { number: 3, title: "Quality Check", icon: CheckCircle2 },
+    { number: 1, title: "Select Patient", icon: User },
+    { number: 2, title: "Upload EEG", icon: UploadIcon },
+    { number: 3, title: "Patient Info & Quality", icon: CheckCircle2 },
   ];
 
   return (
     <MainLayout>
+      <Dialog open={isAddPatientModalOpen} onOpenChange={setIsAddPatientModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add New Patient</DialogTitle>
+            <DialogDescription>
+              Enter the details for the new patient.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="new-name" className="text-right">
+                Name
+              </Label>
+              <Input
+                id="new-name"
+                value={newPatient.name}
+                onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })}
+                className="col-span-3"
+                placeholder="Full name"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="new-patient-code" className="text-right">
+                Patient ID
+              </Label>
+              <Input
+                id="new-patient-code"
+                value={newPatient.patient_code}
+                onChange={(e) => setNewPatient({ ...newPatient, patient_code: e.target.value })}
+                className="col-span-3"
+                placeholder="Unique patient code"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="new-age" className="text-right">
+                Age
+              </Label>
+              <Input
+                id="new-age"
+                type="number"
+                value={newPatient.age}
+                onChange={(e) => setNewPatient({ ...newPatient, age: e.target.value })}
+                className="col-span-3"
+                placeholder="Age in years"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="new-gender" className="text-right">
+                Gender
+              </Label>
+              <Select value={newPatient.gender} onValueChange={(value) => setNewPatient({ ...newPatient, gender: value })}>
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select gender" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="M">Male</SelectItem>
+                  <SelectItem value="F">Female</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsAddPatientModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleAddPatient}>
+              Add Patient
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="mx-auto max-w-3xl space-y-8">
         {/* Header */}
         <div>
@@ -244,8 +455,65 @@ const Upload = () => {
 
         {/* Step Content */}
         <div className="clinical-card">
-          {/* Step 1: Upload */}
+          {/* Step 1: Patient Selection */}
           {currentStep === 1 && (
+            <div className="space-y-6">
+              <div className="text-center">
+                <h2 className="text-xl font-semibold text-foreground">Select Patient</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Choose a patient for the EEG screening</p>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <Label className="text-sm font-medium">Patient</Label>
+                  <Select value={selectedPatientCode} onValueChange={handlePatientSelect}>
+                    <SelectTrigger className="w-full mt-1">
+                      <SelectValue placeholder="Choose a patient or add new..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="add-new">
+                        <div className="flex items-center gap-2">
+                          <Plus className="h-4 w-4" />
+                          Add New Patient
+                        </div>
+                      </SelectItem>
+                      {patients.map((p) => (
+                        <SelectItem key={p.patient_code} value={p.patient_code}>
+                          {p.name} ({p.patient_code})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {selectedPatientCode && selectedPatientCode !== "add-new" && (
+                <div className="rounded-lg border border-border bg-muted/30 p-4">
+                  <h3 className="mb-3 text-sm font-semibold text-foreground">Selected Patient Details</h3>
+                  {(() => {
+                    const patient = patients.find(p => p.patient_code === selectedPatientCode);
+                    return patient ? (
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div><strong>Name:</strong> {patient.name}</div>
+                        <div><strong>ID:</strong> {patient.patient_code}</div>
+                        <div><strong>Age:</strong> {patient.age}</div>
+                        <div><strong>Gender:</strong> {patient.gender}</div>
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <Button onClick={handleNextFromPatientSelect} disabled={!selectedPatientCode || selectedPatientCode === "add-new"}>
+                  Next <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: Upload EEG */}
+          {currentStep === 2 && (
             <div className="space-y-6">
               <div className="text-center">
                 <h2 className="text-xl font-semibold text-foreground">Upload EEG File</h2>
@@ -317,8 +585,8 @@ const Upload = () => {
             </div>
           )}
 
-          {/* Step 2: Patient Info */}
-          {currentStep === 2 && (
+          {/* Step 3: Patient Info & Quality */}
+          {currentStep === 3 && (
             <div className="space-y-6">
               <div className="text-center">
                 <h2 className="text-xl font-semibold text-foreground">Patient Information</h2>
@@ -416,103 +684,6 @@ const Upload = () => {
             </div>
           )}
 
-          {/* Step 3: Quality Check */}
-          {currentStep === 3 && (
-            <div className="space-y-6">
-              <div className="text-center">
-                <h2 className="text-xl font-semibold text-foreground">EEG Quality Analysis</h2>
-                <p className="mt-1 text-sm text-muted-foreground">Automated signal quality assessment</p>
-              </div>
-
-              {isAnalyzing ? (
-                <div className="flex flex-col items-center gap-4 py-12">
-                  <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                  <p className="text-muted-foreground">Analyzing EEG signal quality...</p>
-                </div>
-              ) : qualityResult && (
-                <div className="space-y-4">
-                  {/* Overall Score */}
-                  <div className={cn(
-                    "rounded-xl p-6 text-center",
-                    qualityResult.overallScore >= 80 ? "bg-risk-low-bg" :
-                    qualityResult.overallScore >= 60 ? "bg-risk-moderate-bg" :
-                    "bg-risk-high-bg"
-                  )}>
-                    <p className="text-sm font-medium text-muted-foreground">Overall Quality Score</p>
-                    <p className={cn(
-                      "text-5xl font-bold",
-                      qualityResult.overallScore >= 80 ? "text-risk-low" :
-                      qualityResult.overallScore >= 60 ? "text-risk-moderate" :
-                      "text-risk-high"
-                    )}>
-                      {qualityResult.overallScore}
-                    </p>
-                    <p className="mt-1 text-sm text-muted-foreground">out of 100</p>
-                  </div>
-
-                  {/* Quality Warning */}
-                  {qualityResult.overallScore < 60 && (
-                    <div className="flex items-start gap-3 rounded-lg border border-risk-high/30 bg-risk-high-bg p-4">
-                      <AlertCircle className="h-5 w-5 text-risk-high flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="font-semibold text-risk-high">Poor Signal Quality</p>
-                        <p className="text-sm text-muted-foreground">
-                          Please consider re-recording. Low quality signals may affect diagnostic accuracy.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Quality Details */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="rounded-lg border border-border p-4">
-                      <p className="text-sm text-muted-foreground">Bad Channels</p>
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {qualityResult.badChannels.map((ch) => (
-                          <Badge key={ch} variant="riskModerate">{ch}</Badge>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="rounded-lg border border-border p-4">
-                      <p className="text-sm text-muted-foreground">Muscle Artifacts</p>
-                      <Badge 
-                        variant={
-                          qualityResult.muscleArtifacts === "Low" ? "riskLow" :
-                          qualityResult.muscleArtifacts === "Moderate" ? "riskModerate" :
-                          "riskHigh"
-                        }
-                        className="mt-2"
-                      >
-                        {qualityResult.muscleArtifacts}
-                      </Badge>
-                    </div>
-                    <div className="rounded-lg border border-border p-4 col-span-2">
-                      <p className="text-sm text-muted-foreground">Eye Blink Contamination</p>
-                      <Badge 
-                        variant={
-                          qualityResult.eyeBlinkContamination === "Low" ? "riskLow" :
-                          qualityResult.eyeBlinkContamination === "Moderate" ? "riskModerate" :
-                          "riskHigh"
-                        }
-                        className="mt-2"
-                      >
-                        {qualityResult.eyeBlinkContamination}
-                      </Badge>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-between">
-                <Button variant="outline" onClick={() => setCurrentStep(2)}>
-                  Back
-                </Button>
-                <Button onClick={handleGenerateReport} disabled={isAnalyzing}>
-                  Generate Report <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </MainLayout>

@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "./AuthContext";
 
 export default function Login() {
-  const [username, setUsername] = useState("");
+  const [email, setemail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -23,7 +23,7 @@ export default function Login() {
     setError("");
     setIsLoading(true);
 
-    const payload: LoginPayload = { username, password };
+    const payload: LoginPayload = { email, password };
     try {
       const res = await login(payload);
       if (res.access_token) {
@@ -49,10 +49,10 @@ export default function Login() {
         {error && <p className="text-red-500 mb-4">{error}</p>}
         <input
           type="text"
-          placeholder="Username"
+          placeholder="email"
           className="w-full mb-4 p-2 border rounded"
-          value={username}
-          onChange={e => setUsername(e.target.value)}
+          value={email}
+          onChange={e => setemail(e.target.value)}
           disabled={isLoading}
           required
         />

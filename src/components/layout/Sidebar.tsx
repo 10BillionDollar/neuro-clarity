@@ -12,6 +12,7 @@ import {
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
+  { name: "Patients", href: "/patients", icon: Users },
   { name: "New Screening", href: "/upload", icon: Upload },
   { name: "Patient Reports", href: "/reports", icon: FileText },
   { name: "Longitudinal", href: "/longitudinal", icon: TrendingUp },
