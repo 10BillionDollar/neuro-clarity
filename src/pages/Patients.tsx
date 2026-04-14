@@ -174,10 +174,10 @@ export default function Patients() {
   return (
     <MainLayout>
       <div className="">
-        <div className="mb-4">
+        {/* <div className="mb-4">
            <h1 className="text-[25px] font-semibold text-foreground">Patient Management & Screenings</h1>
           <p className="text-sm text-muted-foreground">Manage patients and view their screening reports</p>
-</div>
+</div> */}
         {/* Patient Report Screenings */}
         <div>
           <ReportTable 

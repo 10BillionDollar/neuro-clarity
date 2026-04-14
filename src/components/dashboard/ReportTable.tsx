@@ -78,14 +78,41 @@ const getQualityBadgeVariant = (quality: any) => {
   return "qualityPoor";
 };
 
+const PATIENTS_SESSION_KEY = "patientTableData";
+
 export function ReportTable({ patients, selectedPatientId, onEditPatient, onDeletePatient, onAddPatient, loading = false }: ReportTableProps) {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
+  const [cachedPatients, setCachedPatients] = useState<Patient[]>(patients ?? []);
   const pageSize = 8;
 
+  useEffect(() => {
+    if (patients.length > 0) {
+      setCachedPatients(patients);
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem(PATIENTS_SESSION_KEY, JSON.stringify(patients));
+      }
+      return;
+    }
+
+    if (typeof window !== "undefined") {
+      const stored = sessionStorage.getItem(PATIENTS_SESSION_KEY);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored) as Patient[];
+          if (Array.isArray(parsed)) {
+            setCachedPatients(parsed);
+          }
+        } catch {
+          sessionStorage.removeItem(PATIENTS_SESSION_KEY);
+        }
+      }
+    }
+  }, [patients, loading]);
+
   const normalizedSearch = searchTerm.toLowerCase().trim();
-  const allPatients = patients ?? [];
+  const allPatients = cachedPatients ?? [];
   const filteredPatients = allPatients.filter((patient) => {
     if (!normalizedSearch) return true;
     return [

@@ -407,25 +407,55 @@ const getRiskBadgeVariant = (level: any) => {
                                           Technical Metrics
                                         </h4>
                                         <div className="space-y-3">
-                                          <div className="flex justify-between items-center p-3 bg-background rounded-lg border">
+                                          <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
                                             <span className="text-sm font-medium">Alpha Peak Gradient</span>
-                                            <span className="font-mono text-sm">{entry.alpha_peak_gradient != null ? entry.alpha_peak_gradient.toFixed(2) : "—"}</span>
+                                            {entry.alpha_peak_gradient != null ? (
+                                              <Badge variant="secondary" className="px-3 py-1.5 text-sm">
+                                                {entry.alpha_peak_gradient.toFixed(2)}
+                                              </Badge>
+                                            ) : (
+                                              <span className="text-muted-foreground">—</span>
+                                            )}
                                           </div>
-                                          <div className="flex justify-between items-center p-3 bg-background rounded-lg border">
+                                          <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
                                             <span className="text-sm font-medium">CLI</span>
-                                            <span className="font-mono text-sm">{entry.cli != null ? parseInt(entry.cli) : "—"}</span>
+                                            {entry.cli != null ? (
+                                              <Badge variant="secondary" className="px-3 py-1.5 text-sm">
+                                                {parseInt(entry.cli)}
+                                              </Badge>
+                                            ) : (
+                                              <span className="text-muted-foreground">—</span>
+                                            )}
                                           </div>
-                                          <div className="flex justify-between items-center p-3 bg-background rounded-lg border">
+                                          <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
                                             <span className="text-sm font-medium">Entropy Gradient</span>
-                                            <span className="font-mono text-sm">{entry.entropy_gradient != null ? entry.entropy_gradient.toFixed(2) : "—"}</span>
+                                            {entry.entropy_gradient != null ? (
+                                              <Badge variant="secondary" className="px-3 py-1.5 text-sm">
+                                                {entry.entropy_gradient.toFixed(2)}
+                                              </Badge>
+                                            ) : (
+                                              <span className="text-muted-foreground">—</span>
+                                            )}
                                           </div>
-                                          <div className="flex justify-between items-center p-3 bg-background rounded-lg border">
+                                          <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
                                             <span className="text-sm font-medium">Occipital Entropy</span>
-                                            <span className="font-mono text-sm">{entry.occipital_entropy != null ? entry.occipital_entropy.toFixed(2) : "—"}</span>
+                                            {entry.occipital_entropy != null ? (
+                                              <Badge variant="secondary" className="px-3 py-1.5 text-sm">
+                                                {entry.occipital_entropy.toFixed(2)}
+                                              </Badge>
+                                            ) : (
+                                              <span className="text-muted-foreground">—</span>
+                                            )}
                                           </div>
-                                          <div className="flex justify-between items-center p-3 bg-background rounded-lg border">
+                                          <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
                                             <span className="text-sm font-medium">Posterior Dominance Index</span>
-                                            <span className="font-mono text-sm">{entry.posterior_dominance_index != null ? entry.posterior_dominance_index.toFixed(2) : "—"}</span>
+                                            {entry.posterior_dominance_index != null ? (
+                                              <Badge variant="secondary" className="px-3 py-1.5 text-sm">
+                                                {entry.posterior_dominance_index.toFixed(2)}
+                                              </Badge>
+                                            ) : (
+                                              <span className="text-muted-foreground">—</span>
+                                            )}
                                           </div>
                                         </div>
                                       </div>
@@ -436,17 +466,35 @@ const getRiskBadgeVariant = (level: any) => {
                                           AI Probabilities
                                         </h4>
                                         <div className="space-y-3">
-                                          <div className="flex justify-between items-center p-3 bg-background rounded-lg border">
+                                          <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
                                             <span className="text-sm font-medium">DL Probability</span>
-                                            <span className="font-mono text-sm">{entry.dl_probability != null ? (entry.dl_probability * 100).toFixed(1) : "—"}%</span>
+                                            {entry.dl_probability != null ? (
+                                              <Badge variant="secondary" className="px-3 py-1.5 text-sm">
+                                                {(entry.dl_probability * 100).toFixed(1)}%
+                                              </Badge>
+                                            ) : (
+                                              <span className="text-muted-foreground">—</span>
+                                            )}
                                           </div>
-                                          <div className="flex justify-between items-center p-3 bg-background rounded-lg border">
+                                          <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
                                             <span className="text-sm font-medium">Fusion Probability</span>
-                                            <span className="font-mono text-sm">{entry.fusion_probability != null ? (entry.fusion_probability * 100).toFixed(1) : "—"}%</span>
+                                            {entry.fusion_probability != null ? (
+                                              <Badge variant="secondary" className="px-3 py-1.5 text-sm">
+                                                {(entry.fusion_probability * 100).toFixed(1)}%
+                                              </Badge>
+                                            ) : (
+                                              <span className="text-muted-foreground">—</span>
+                                            )}
                                           </div>
-                                          <div className="flex justify-between items-center p-3 bg-background rounded-lg border">
+                                          <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
                                             <span className="text-sm font-medium">ML Probability</span>
-                                            <span className="font-mono text-sm">{entry.ml_probability != null ? (entry.ml_probability * 100).toFixed(1) : "—"}%</span>
+                                            {entry.ml_probability != null ? (
+                                              <Badge variant="secondary" className="px-3 py-1.5 text-sm">
+                                                {(entry.ml_probability * 100).toFixed(1)}%
+                                              </Badge>
+                                            ) : (
+                                              <span className="text-muted-foreground">—</span>
+                                            )}
                                           </div>
                                         </div>
                                       </div>
@@ -454,21 +502,45 @@ const getRiskBadgeVariant = (level: any) => {
                                       <div className="space-y-4">
                                         <h4 className="font-medium text-foreground">Additional Information</h4>
                                         <div className="space-y-3">
-                                          <div className="flex justify-between items-center p-3 bg-background rounded-lg border">
+                                          <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
                                             <span className="text-sm font-medium">Brain Health Score</span>
-                                            <span className="font-medium">{entry.internal_brain_health_score ?? "—"}</span>
+                                            {entry.internal_brain_health_score != null ? (
+                                              <Badge variant={entry.internal_brain_health_score >= 7 ? "default" : entry.internal_brain_health_score >= 4 ? "secondary" : "destructive"} className="px-3 py-1.5 text-sm">
+                                                {entry.internal_brain_health_score}/10
+                                              </Badge>
+                                            ) : (
+                                              <span className="text-muted-foreground">—</span>
+                                            )}
                                           </div>
-                                          <div className="flex justify-between items-center p-3 bg-background rounded-lg border">
+                                          <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
                                             <span className="text-sm font-medium">NIS</span>
-                                            <span className="font-mono text-sm">{entry.nis != null ? parseInt(entry.nis) : "—"}</span>
+                                            {entry.nis != null ? (
+                                              <Badge variant="secondary" className="px-3 py-1.5 text-sm">
+                                                {parseInt(entry.nis)}
+                                              </Badge>
+                                            ) : (
+                                              <span className="text-muted-foreground">—</span>
+                                            )}
                                           </div>
-                                          <div className="flex justify-between items-center p-3 bg-background rounded-lg border">
+                                          <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
                                             <span className="text-sm font-medium">PCR</span>
-                                            <span className="font-mono text-sm">{entry.pcr != null ? parseInt(entry.pcr) : "—"}</span>
+                                            {entry.pcr != null ? (
+                                              <Badge variant="secondary" className="px-3 py-1.5 text-sm">
+                                                {parseInt(entry.pcr)}
+                                              </Badge>
+                                            ) : (
+                                              <span className="text-muted-foreground">—</span>
+                                            )}
                                           </div>
-                                          <div className="flex justify-between items-center p-3 bg-background rounded-lg border">
+                                          <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
                                             <span className="text-sm font-medium">Theta Alpha Ratio</span>
-                                            <span className="font-mono text-sm">{entry.theta_alpha_ratio_frontal != null ? entry.theta_alpha_ratio_frontal.toFixed(3) : "—"}</span>
+                                            {entry.theta_alpha_ratio_frontal != null ? (
+                                              <Badge variant="secondary" className="px-3 py-1.5 text-sm">
+                                                {entry.theta_alpha_ratio_frontal.toFixed(3)}
+                                              </Badge>
+                                            ) : (
+                                              <span className="text-muted-foreground">—</span>
+                                            )}
                                           </div>
                                         </div>
                                       </div>

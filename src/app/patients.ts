@@ -74,9 +74,46 @@ export async function deletePatient(patientCode: string) {
   return handleResponse(res);
 }
 
+const patientHistoryPromiseMap = new Map<string, Promise<any>>();
+
 export async function getPatientHistory(patientCode: string) {
-  const res = await fetchWithAuth(`${API_BASE_URL}/patient-history/${patientCode}`, {
-    method: "GET",
-  });
-  return handleResponse(res);
+  if (!patientCode) {
+    throw new Error("Patient code is required to fetch history.");
+  }
+
+  const storageKey = `patientHistory:${patientCode}`;
+  if (typeof window !== "undefined") {
+    const cached = sessionStorage.getItem(storageKey);
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch {
+        sessionStorage.removeItem(storageKey);
+      }
+    }
+  }
+
+  const existingPromise = patientHistoryPromiseMap.get(patientCode);
+  if (existingPromise) {
+    return existingPromise;
+  }
+
+  const promise = (async () => {
+    const res = await fetchWithAuth(`${API_BASE_URL}/patient-history/${patientCode}`, {
+      method: "GET",
+    });
+    const data = await handleResponse(res);
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.setItem(storageKey, JSON.stringify(data));
+      } catch {
+        // ignore storage errors
+      }
+    }
+    return data;
+  })();
+
+  patientHistoryPromiseMap.set(patientCode, promise);
+  promise.finally(() => patientHistoryPromiseMap.delete(patientCode));
+  return promise;
 }
