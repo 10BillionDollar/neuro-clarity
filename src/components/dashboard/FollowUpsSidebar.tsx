@@ -1,6 +1,5 @@
 import { Calendar, Clock, AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-
 interface FollowUp {
   id: string;
   patientName: string;
@@ -51,7 +50,7 @@ export function FollowUpsSidebar() {
                   <AlertCircle className="h-4 w-4 text-risk-high animate-pulse-subtle" />
                 )}
               </div>
-              
+            
               <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
                 <Clock className="h-3 w-3" />
                 <span>Re-test in {followUp.interval}</span>

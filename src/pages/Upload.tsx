@@ -58,8 +58,9 @@ interface QualityResult {
 const Upload = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState<Step>(1);
-  const [patients, setPatients] = useState<Patient[]>([]);
+  const [patients, setPatients] = useState<Patient[]>([]);  
   const [selectedPatientCode, setSelectedPatientCode] = useState<string>("");
+  const [patientSearch, setPatientSearch] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -97,6 +98,13 @@ const Upload = () => {
     };
     fetchPatients();
   }, []);
+
+  const filteredPatients = patients.filter((patient) => {
+    if (!patientSearch.trim()) return true;
+    const query = patientSearch.toLowerCase().trim();
+    return [patient.name, patient.patient_code, patient.gender]
+      .some((value) => String(value).toLowerCase().includes(query));
+  });
 
   const handlePatientSelect = (value: string) => {
     if (value === "add-new") {
@@ -213,14 +221,30 @@ const Upload = () => {
     }
   };
 
-  const runQualityCheck = async () => {
-    if (!uploadedFileId) return;
+  const handleUploadAndContinue = async () => {
+    if (!file) return;
 
-    setIsAnalyzing(true);
-
+    setIsUploading(true);
     try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('patient_code', selectedPatientCode);
+
+      const response = await fetchWithAuth(`${API_BASE_URL}/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Upload failed');
+      }
+
+      const result = await response.json();
+      const jobId = result.job_id || result.id; // Get job_id from response
+      setUploadedFileId(jobId);
+
       // Save patient info (POST) using the job_id
-      const savePatientResponse = await fetchWithAuth(`${API_BASE_URL}/patient-info/${uploadedFileId}`, {
+      const savePatientResponse = await fetchWithAuth(`${API_BASE_URL}/patient-info/${jobId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -249,6 +273,31 @@ const Upload = () => {
         });
       }
 
+      toast({
+        title: "Upload Successful",
+        description: "File uploaded and patient information saved. Proceeding to quality check.",
+      });
+
+      // Move to step 3 for quality check
+      setCurrentStep(3);
+
+    } catch (error) {
+      toast({
+        title: "Upload Failed",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const runQualityCheck = async () => {
+    if (!uploadedFileId) return;
+
+    setIsAnalyzing(true);
+
+    try {
       // Fetch quality check results
       const qualityResponse = await fetchWithAuth(`${API_BASE_URL}/quality-check/${uploadedFileId}`, {
         method: 'GET',
@@ -262,54 +311,23 @@ const Upload = () => {
           muscleArtifacts: qualityData.muscle_artifacts || "Low",
           eyeBlinkContamination: qualityData.eye_blinks || "Low",
         });
+
+        toast({
+          title: "Quality Check Complete",
+          description: "Analysis completed successfully.",
+        });
+      } else {
+        throw new Error('Quality check failed');
       }
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('Error in quality check:', error);
       toast({
-        title: "Error",
-        description: "Failed to save patient info or load quality check results.",
+        title: "Quality Check Failed",
+        description: "Failed to run quality analysis. You can still generate a report.",
         variant: "destructive",
       });
     } finally {
       setIsAnalyzing(false);
-    }
-  };
-
-  const handleUploadAndContinue = async () => {
-    if (!file) return;
-
-    setIsUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetchWithAuth(`${API_BASE_URL}/upload`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error('Upload failed');
-      }
-
-      const result = await response.json();
-      const jobId = result.job_id || result.id; // Get job_id from response
-      setUploadedFileId(jobId);
-
-      toast({
-        title: "Upload Successful",
-        description: "File uploaded successfully.",
-      });
-
-      setCurrentStep(3);
-    } catch (error) {
-      toast({
-        title: "Upload Failed",
-        description: "Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsUploading(false);
     }
   };
 
@@ -335,7 +353,7 @@ const Upload = () => {
   const steps = [
     { number: 1, title: "Select Patient", icon: User },
     { number: 2, title: "Upload EEG", icon: UploadIcon },
-    { number: 3, title: "Patient Info & Quality", icon: CheckCircle2 },
+    { number: 3, title: "Quality Check", icon: CheckCircle2 },
   ];
 
   return (
@@ -470,18 +488,35 @@ const Upload = () => {
                     <SelectTrigger className="w-full mt-1">
                       <SelectValue placeholder="Choose a patient or add new..." />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="add-new">
-                        <div className="flex items-center gap-2">
+                    <SelectContent className="w-full min-w-[20rem] max-w-md">
+                      <div className="px-3 pt-3 pb-2">
+                        <div className="text-sm font-semibold text-foreground">Search patients</div>
+                        <Input
+                          value={patientSearch}
+                          onChange={(event) => setPatientSearch(event.target.value)}
+                          placeholder="Type name, ID or gender..."
+                          className="mt-2 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div className="border-t border-border/70 my-2" />
+                      <SelectItem value="add-new" className="rounded-xl px-3 py-3">
+                        <div className="flex items-center gap-2 text-sm font-medium">
                           <Plus className="h-4 w-4" />
                           Add New Patient
                         </div>
                       </SelectItem>
-                      {patients.map((p) => (
-                        <SelectItem key={p.patient_code} value={p.patient_code}>
-                          {p.name} ({p.patient_code})
-                        </SelectItem>
-                      ))}
+                      {filteredPatients.length > 0 ? (
+                        filteredPatients.map((p) => (
+                          <SelectItem key={p.patient_code} value={p.patient_code} className="rounded-xl px-3 py-3">
+                            <div className="flex flex-col gap-1">
+                              <span className="font-medium">{p.name}</span>
+                              <span className="text-xs text-muted-foreground">{p.patient_code} · {p.gender} · {p.age} yrs</span>
+                            </div>
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <div className="px-3 py-3 text-sm text-muted-foreground">No patients match your search.</div>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -520,167 +555,218 @@ const Upload = () => {
                 <p className="mt-1 text-sm text-muted-foreground">Supported formats: EDF, BDF</p>
               </div>
 
-              <div
-                className={cn(
-                  "upload-zone",
-                  isDragging && "upload-zone-active",
-                  file && "border-risk-low bg-risk-low-bg"
-                )}
-                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={handleDrop}
-              >
-                {file ? (
-                  <div className="flex flex-col items-center gap-3">
-                    <FileText className="h-12 w-12 text-risk-low" />
-                    <div>
-                      <p className="font-medium text-foreground">{file.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {(file.size / 1024 / 1024).toFixed(2)} MB
-                      </p>
+              {uploadedFileId ? (
+                <div className="space-y-4">
+                  <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+                    <div className="flex items-center">
+                      <CheckCircle2 className="h-5 w-5 text-green-600 mr-2" />
+                      <span className="text-green-800 font-medium">Upload Successful</span>
                     </div>
-                    {!uploadedFileId && (
-                      <Button variant="outline" size="sm" onClick={() => setFile(null)}>
-                        Remove
-                      </Button>
+                    <p className="mt-1 text-sm text-green-700">File uploaded and patient information saved successfully.</p>
+                  </div>
+
+                  <div className="flex justify-between">
+                    <Button variant="outline" onClick={() => setCurrentStep(1)}>
+                      Back
+                    </Button>
+                    <Button onClick={() => setCurrentStep(3)}>
+                      Proceed to Quality Check <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div
+                    className={cn(
+                      "upload-zone",
+                      isDragging && "upload-zone-active",
+                      file && "border-risk-low bg-risk-low-bg"
+                    )}
+                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={handleDrop}
+                  >
+                    {file ? (
+                      <div className="flex flex-col items-center gap-3">
+                        <FileText className="h-12 w-12 text-risk-low" />
+                        <div>
+                          <p className="font-medium text-foreground">{file.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {(file.size / 1024 / 1024).toFixed(2)} MB
+                          </p>
+                        </div>
+                        {!uploadedFileId && (
+                          <Button variant="outline" size="sm" onClick={() => setFile(null)}>
+                            Remove
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-3">
+                        <UploadIcon className="h-12 w-12 text-muted-foreground" />
+                        <div>
+                          <p className="font-medium text-foreground">Drag and drop your EEG file here</p>
+                          <p className="text-sm text-muted-foreground">or click to browse</p>
+                        </div>
+                        <input
+                          type="file"
+                          accept=".edf,.bdf"
+                          className="hidden"
+                          id="file-upload"
+                          onChange={handleFileSelect}
+                        />
+                        <label htmlFor="file-upload">
+                          <Button variant="outline" asChild>
+                            <span>Browse Files</span>
+                          </Button>
+                        </label>
+                      </div>
                     )}
                   </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-3">
-                    <UploadIcon className="h-12 w-12 text-muted-foreground" />
-                    <div>
-                      <p className="font-medium text-foreground">Drag and drop your EEG file here</p>
-                      <p className="text-sm text-muted-foreground">or click to browse</p>
-                    </div>
-                    <input
-                      type="file"
-                      accept=".edf,.bdf"
-                      className="hidden"
-                      id="file-upload"
-                      onChange={handleFileSelect}
-                    />
-                    <label htmlFor="file-upload">
-                      <Button variant="outline" asChild>
-                        <span>Browse Files</span>
-                      </Button>
-                    </label>
-                  </div>
-                )}
-              </div>
 
-              <div className="flex justify-end">
-                <Button onClick={handleUploadAndContinue} disabled={!file || isUploading}>
-                  {isUploading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Uploading...
-                    </>
-                  ) : (
-                    <>
-                      Continue <ArrowRight className="ml-2 h-4 w-4" />
-                    </>
-                  )}
-                </Button>
-              </div>
+                  <div className="flex justify-between">
+                    <Button variant="outline" onClick={() => setCurrentStep(1)}>
+                      Back
+                    </Button>
+                    <Button onClick={handleUploadAndContinue} disabled={!file || isUploading}>
+                      {isUploading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          Upload File <ArrowRight className="ml-2 h-4 w-4" />
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
-          {/* Step 3: Patient Info & Quality */}
+          {/* Step 3: Quality Check */}
           {currentStep === 3 && (
             <div className="space-y-6">
               <div className="text-center">
-                <h2 className="text-xl font-semibold text-foreground">Patient Information</h2>
-                <p className="mt-1 text-sm text-muted-foreground">Enter patient details for the screening</p>
+                <h2 className="text-xl font-semibold text-foreground">Quality Check</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Run quality analysis on the uploaded EEG data</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Patient Name *</Label>
-                  <Input
-                    id="name"
-                    value={patientInfo.name}
-                    onChange={(e) => setPatientInfo({ ...patientInfo, name: e.target.value })}
-                    placeholder="Full name"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="id">Patient ID *</Label>
-                  <Input
-                    id="id"
-                    value={patientInfo.id}
-                    onChange={(e) => setPatientInfo({ ...patientInfo, id: e.target.value })}
-                    placeholder="Hospital ID"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="age">Age *</Label>
-                  <Input
-                    id="age"
-                    type="number"
-                    value={patientInfo.age}
-                    onChange={(e) => setPatientInfo({ ...patientInfo, age: e.target.value })}
-                    placeholder="Years"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="gender">Gender *</Label>
-                  <Input
-                    id="gender"
-                    value={patientInfo.gender}
-                    onChange={(e) => setPatientInfo({ ...patientInfo, gender: e.target.value })}
-                    placeholder="M / F / Other"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="notes">Clinical Notes (Optional)</Label>
-                <Textarea
-                  id="notes"
-                  value={patientInfo.notes}
-                  onChange={(e) => setPatientInfo({ ...patientInfo, notes: e.target.value })}
-                  placeholder="Any relevant clinical observations..."
-                  rows={3}
-                />
-              </div>
-
-              <div className="rounded-lg border border-border bg-muted/30 p-4">
-                <h3 className="mb-3 text-sm font-semibold text-foreground">Neuropsych Scores (Optional)</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="moca">MoCA Score</Label>
-                    <Input
-                      id="moca"
-                      type="number"
-                      value={patientInfo.mocaScore}
-                      onChange={(e) => setPatientInfo({ ...patientInfo, mocaScore: e.target.value })}
-                      placeholder="0-30"
-                    />
+              {qualityResult ? (
+                <div className="space-y-6">
+                  <div className="rounded-2xl border border-green-200 bg-green-50 p-5 shadow-sm">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-green-100 text-green-700">
+                          <CheckCircle2 className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-green-900">Quality Check Complete</p>
+                          <p className="text-sm text-green-800">EEG analysis is complete and results are ready.</p>
+                        </div>
+                      </div>
+                      <div className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-foreground shadow-sm">
+                        <span>Patient: </span>
+                        <span className="text-primary">{patientInfo.name || patientInfo.id}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="mmse">MMSE Score</Label>
-                    <Input
-                      id="mmse"
-                      type="number"
-                      value={patientInfo.mmseScore}
-                      onChange={(e) => setPatientInfo({ ...patientInfo, mmseScore: e.target.value })}
-                      placeholder="0-30"
-                    />
+
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div className="rounded-2xl border border-border bg-card p-5">
+                      <p className="text-sm font-medium text-muted-foreground">Overall Quality</p>
+                      <p className="mt-3 text-4xl font-bold text-foreground">{qualityResult.overallScore}%</p>
+                      <p className="mt-2 text-sm text-muted-foreground">Higher is better</p>
+                    </div>
+
+                    <div className="rounded-2xl border border-border bg-card p-5">
+                      <p className="text-sm font-medium text-muted-foreground">Signal Quality</p>
+                      <Badge
+                        className="mt-3"
+                        variant={qualityResult.overallScore >= 70 ? 'default' : 'destructive'}
+                      >
+                        {qualityResult.overallScore >= 70 ? 'Good' : 'Poor'}
+                      </Badge>
+                      <p className="mt-3 text-sm text-muted-foreground">
+                        {qualityResult.overallScore >= 70 ? 'Signal quality is within expected range.' : 'Signal quality is below threshold.'}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-border bg-card p-5">
+                      <p className="text-sm font-medium text-muted-foreground">Bad Channels</p>
+                      <p className="mt-3 text-3xl font-semibold text-foreground">{qualityResult.badChannels?.length || 0}</p>
+                      <p className="mt-2 text-sm text-muted-foreground">Channels flagged for review</p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="rounded-2xl border border-border bg-card p-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium text-muted-foreground">Muscle Artifacts</p>
+                        <Badge variant={qualityResult.muscleArtifacts === 'Low' ? 'default' : 'destructive'}>
+                          {qualityResult.muscleArtifacts || 'Unknown'}
+                        </Badge>
+                      </div>
+                      <p className="mt-3 text-sm text-muted-foreground">Movement-related noise in the recording.</p>
+                    </div>
+
+                    <div className="rounded-2xl border border-border bg-card p-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium text-muted-foreground">Eye Blink Contamination</p>
+                        <Badge variant={qualityResult.eyeBlinkContamination === 'Low' ? 'default' : 'destructive'}>
+                          {qualityResult.eyeBlinkContamination || 'Unknown'}
+                        </Badge>
+                      </div>
+                      <p className="mt-3 text-sm text-muted-foreground">Eye blink activity present in the EEG.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <Button variant="outline" onClick={() => setCurrentStep(2)}>
+                      Back
+                    </Button>
+                    <Button onClick={handleGenerateReport} className="w-full sm:w-auto">
+                      Generate Report <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+                    <div className="flex flex-col items-center gap-4 text-center">
+                      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <CheckCircle2 className="h-7 w-7" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-foreground">Ready for Quality Check</h3>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          Your EEG file is uploaded. Run the analysis to view quality metrics and next steps.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
 
-              <div className="flex justify-between">
-                <Button variant="outline" onClick={() => setCurrentStep(1)}>
-                  Back
-                </Button>
-                <Button 
-                  onClick={runQualityCheck}
-                  disabled={!patientInfo.name || !patientInfo.id || !patientInfo.age || !patientInfo.gender}
-                >
-                  Run Quality Check <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </div>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+                    <Button variant="outline" onClick={() => setCurrentStep(2)}>
+                      Back
+                    </Button>
+                    <Button onClick={runQualityCheck} disabled={isAnalyzing} className="w-full sm:w-auto">
+                      {isAnalyzing ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Running Quality Check...
+                        </>
+                      ) : (
+                        <>
+                          Run Quality Check <ArrowRight className="ml-2 h-4 w-4" />
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

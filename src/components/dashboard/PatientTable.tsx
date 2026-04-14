@@ -1,6 +1,16 @@
 import { Eye, TrendingUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import {
   Table,
   TableBody,
@@ -51,6 +61,37 @@ export function PatientTable({ patients: propPatients }: PatientTableProps = {})
   const navigate = useNavigate();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 8;
+
+  const normalizedSearch = searchTerm.toLowerCase().trim();
+  const filteredPatients = patients.filter((patient) => {
+    if (!normalizedSearch) return true;
+    return [
+      patient.name,
+      patient.patient_code,
+      patient.gender,
+      patient.latestEEGDate,
+      patient.latestRiskLevel,
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(normalizedSearch));
+  });
+
+  const pageCount = Math.max(1, Math.ceil(filteredPatients.length / pageSize));
+
+  useEffect(() => {
+    if (page > pageCount) {
+      setPage(pageCount);
+    }
+  }, [page, pageCount]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm]);
+
+  const currentPatients = filteredPatients.slice((page - 1) * pageSize, page * pageSize);
 
   useEffect(() => {
     const fetchPatients = async () => {
@@ -102,6 +143,15 @@ export function PatientTable({ patients: propPatients }: PatientTableProps = {})
         <h3 className="text-lg font-semibold text-foreground">Recent Patient Screenings</h3>
         <p className="text-sm text-muted-foreground">Latest EEG screenings and patient information</p>
       </div>
+      <div className="border-b border-border/70 bg-background/80 px-4 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <Input
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          placeholder="Search patients, ID, screening..."
+          className="max-w-sm"
+        />
+        <p className="text-sm text-muted-foreground">Showing {currentPatients.length} of {filteredPatients.length} patients</p>
+      </div>
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/30">
@@ -119,14 +169,14 @@ export function PatientTable({ patients: propPatients }: PatientTableProps = {})
                 Loading patients...
               </TableCell>
             </TableRow>
-          ) : patients.length === 0 ? (
+          ) : filteredPatients.length === 0 ? (
             <TableRow>
               <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                No patients found
+                No matching patients found
               </TableCell>
             </TableRow>
           ) : (
-            patients.slice(0, 8).map((patient, index) => (
+            currentPatients.map((patient, index) => (
               <TableRow 
                 key={patient.patient_code} 
                 className="data-row"
@@ -176,6 +226,42 @@ export function PatientTable({ patients: propPatients }: PatientTableProps = {})
           )}
         </TableBody>
       </Table>
+      {pageCount > 1 && !loading && (
+        <div className="border-t border-border/70 bg-background/80 px-4 py-3">
+          <Pagination>
+            <PaginationPrevious
+              onClick={(event) => {
+                event.preventDefault();
+                setPage((prev) => Math.max(1, prev - 1));
+              }}
+            />
+            <PaginationContent>
+              {Array.from({ length: pageCount }, (_, index) => {
+                const pageNumber = index + 1;
+                return (
+                  <PaginationItem key={pageNumber}>
+                    <PaginationLink
+                      isActive={pageNumber === page}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        setPage(pageNumber);
+                      }}
+                    >
+                      {pageNumber}
+                    </PaginationLink>
+                  </PaginationItem>
+                );
+              })}
+            </PaginationContent>
+            <PaginationNext
+              onClick={(event) => {
+                event.preventDefault();
+                setPage((prev) => Math.min(pageCount, prev + 1));
+              }}
+            />
+          </Pagination>
+        </div>
+      )}
     </div>
   );
 }

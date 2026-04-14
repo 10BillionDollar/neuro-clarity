@@ -182,6 +182,7 @@ export default function Patients() {
         <div>
           <ReportTable 
             patients={patients}
+            loading={loading}
             onEditPatient={openEdit}
             onDeletePatient={(patientCode) => setDeleteCode(patientCode)}
             onAddPatient={openCreate}

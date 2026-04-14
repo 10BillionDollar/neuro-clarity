@@ -106,10 +106,8 @@ const Index = () => {
           {/* Patient Table - Takes 2 columns */}
           <div className="lg:col-span-2">
              <ReportTable
-            showFilters={false}
               patients={patients}
-            title="Today's Screenings"
-            subtitle="Sorted by risk level — high risk patients first"
+              loading={loading}
           />
           </div>
 
