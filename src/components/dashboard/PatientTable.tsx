@@ -1,6 +1,7 @@
 import { Eye, TrendingUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DateRangePicker, type DateRange } from "@/components/ui/date-range-picker";
 import { Input } from "@/components/ui/input";
 import {
   Pagination,
@@ -62,11 +63,32 @@ export function PatientTable({ patients: propPatients }: PatientTableProps = {})
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [dateRange, setDateRange] = useState<DateRange>();
   const [page, setPage] = useState(1);
   const pageSize = 8;
 
+  const isDateInRange = (dateStr: string | undefined): boolean => {
+    if (!dateStr) return true;
+    try {
+      const date = new Date(dateStr);
+      if (dateRange.from && date < dateRange.from) return false;
+      if (dateRange.to) {
+        const to = new Date(dateRange.to);
+        to.setHours(23, 59, 59, 999);
+        if (date > to) return false;
+      }
+      return true;
+    } catch {
+      return true;
+    }
+  };
+
   const normalizedSearch = searchTerm.toLowerCase().trim();
   const filteredPatients = patients.filter((patient) => {
+    // Date range filter
+    if (!isDateInRange(patient.latestEEGDate)) return false;
+
+    // Search filter
     if (!normalizedSearch) return true;
     return [
       patient.name,
@@ -88,8 +110,10 @@ export function PatientTable({ patients: propPatients }: PatientTableProps = {})
   }, [page, pageCount]);
 
   useEffect(() => {
-    setPage(1);
-  }, [searchTerm]);
+    if (page > Math.ceil(filteredPatients.length / pageSize)) {
+      setPage(1);
+    }
+  }, [searchTerm, fromDate, toDate, filteredPatients.length, pageSize])
 
   const currentPatients = filteredPatients.slice((page - 1) * pageSize, page * pageSize);
 
@@ -143,14 +167,26 @@ export function PatientTable({ patients: propPatients }: PatientTableProps = {})
         <h3 className="text-lg font-semibold text-foreground">Recent Patient Screenings</h3>
         <p className="text-sm text-muted-foreground">Latest EEG screenings and patient information</p>
       </div>
-      <div className="border-b border-border/70 bg-background/80 px-4 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Input
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-          placeholder="Search patients, ID, screening..."
-          className="max-w-sm"
-        />
-        <p className="text-sm text-muted-foreground">Showing {currentPatients.length} of {filteredPatients.length} patients</p>
+      <div className="border-b border-border/70 bg-background/80 px-4 py-4 space-y-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <Input
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Search patients, ID, screening..."
+            className="max-w-sm"
+          />
+          <p className="text-sm text-muted-foreground">Showing {currentPatients.length} of {filteredPatients.length} patients</p>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <DateRangePicker
+            label="Screening date range"
+            range={dateRange}
+            onRangeChange={setDateRange}
+            onClear={() => setDateRange({})}
+            placeholder="Choose a date range"
+            className="sm:col-span-2 lg:col-span-3"
+          />
+        </div>
       </div>
       <Table>
         <TableHeader>

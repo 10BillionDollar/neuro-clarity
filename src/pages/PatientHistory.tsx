@@ -1,8 +1,9 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate,useLocation } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { DateRangePicker, type DateRange } from "@/components/ui/date-range-picker";
 import { Input } from "@/components/ui/input";
 import {
   Pagination,
@@ -22,18 +23,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { getPatientHistory } from "@/app/patients";
+import { getPatientById, getPatientHistory } from "@/app/patients";
 import { ArrowLeft, Clock, ChevronDown, ChevronRight, TrendingUp, Activity, Brain, Eye } from "lucide-react";
 
 interface HistoryEntry {
@@ -53,33 +48,70 @@ export default function PatientHistory() {
   const { patient_code } = useParams<{ patient_code: string }>();
   const navigate = useNavigate();
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [patientName, setPatientName] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expandedRows, setExpandedRows] = useState<Set<string | number>>(new Set());
   const [searchTerm, setSearchTerm] = useState("");
+  const [dateRange, setDateRange] = useState<DateRange>();
   const [page, setPage] = useState(1);
   const pageSize = 8;
+  const location = useLocation();
+  const patienData = location.state?.patient;
+  const parseDate = (dateStr: string | undefined): Date | null => {
+    if (!dateStr) return null;
+    try {
+      return new Date(dateStr);
+    } catch {
+      return null;
+    }
+  };
+
+  const isDateInRange = (dateStr: string | undefined): boolean => {
+    if (!dateStr) return true;
+    const date = parseDate(dateStr);
+    if (!date) return true;
+
+    if (dateRange?.from && date < dateRange.from) return false;
+    if (dateRange?.to) {
+      const to = new Date(dateRange.to);
+      to.setHours(23, 59, 59, 999);
+      if (date > to) return false;
+    }
+    return true;
+  };
 
   const toggleRowExpansion = (rowId: string | number) => {
-    const newExpanded = new Set(expandedRows);
-    if (newExpanded.has(rowId)) {
-      newExpanded.delete(rowId);
-    } else {
-      newExpanded.add(rowId);
-    }
-    setExpandedRows(newExpanded);
+  //  console.log(rowId,"rowId")
+  navigate(`/report/${rowId}`, { state: { patientCode: patient_code, reportId: rowId } });
   };
+
+  // console.log(,"navigate")
 
   useEffect(() => {
     if (!patient_code) return;
     setLoading(true);
     setError("");
-    getPatientHistory(patient_code)
+
+    const loadHistory = getPatientHistory(patient_code)
       .then((data) => {
         const list = Array.isArray(data) ? data : data.history ?? data.records ?? [];
+
+// console.log(list,"list")
         setHistory(list);
+      });
+
+    const loadPatient = getPatientById(patient_code)
+      .then((patient) => {
+        const name = patient?.name || patient?.patient?.name || patient?.full_name || "";
+        setPatientName(name);
       })
-      .catch((err: any) => setError(err.message || "Failed to load patient history"))
+      .catch(() => {
+        // ignore patient name errors
+      });
+
+    Promise.all([loadHistory, loadPatient])
+      .catch((err) => setError(err.message || "Failed to load patient history"))
       .finally(() => setLoading(false));
   }, [patient_code]);
 
@@ -94,14 +126,28 @@ export default function PatientHistory() {
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return "—";
     try {
-      return new Date(dateStr).toLocaleDateString("en-IN", {
+      const date = new Date(dateStr);
+      const hasTime = /[T ]\d{2}:\d{2}/.test(dateStr);
+      const baseOptions: Intl.DateTimeFormatOptions = {
         day: "2-digit",
         month: "short",
         year: "numeric",
-      });
-    } catch { 
+      };
+
+      if (hasTime) {
+        return date.toLocaleString("en-IN", {
+          ...baseOptions,
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        });
+      }
+
+      return date.toLocaleDateString("en-IN", baseOptions);
+    } catch {
       return dateStr;
     }
+
   };
 
   const getQualityBadgeVariant = (quality: any) => {
@@ -122,6 +168,11 @@ const getRiskBadgeVariant = (level: any) => {
 
   const normalizedSearch = searchTerm.toLowerCase().trim();
   const filteredHistory = history.filter((entry) => {
+    // Date range filter
+    const dateField = entry.report_date || entry.created_at;
+    if (!isDateInRange(dateField)) return false;
+
+    // Search filter
     if (!normalizedSearch) return true;
     return [
       entry.file_name,
@@ -146,7 +197,7 @@ const getRiskBadgeVariant = (level: any) => {
 
   useEffect(() => {
     setPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, dateRange]);
 
   const currentHistory = filteredHistory.slice((page - 1) * pageSize, page * pageSize);
 
@@ -241,7 +292,10 @@ const getRiskBadgeVariant = (level: any) => {
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Patient History</h1>
             <p className="text-muted-foreground">
-              Patient Code: <span className="font-mono font-semibold text-foreground">{patient_code}</span>
+              {patienData ? (
+                <span>Patient: <span className="font-medium text-foreground">{patienData.name}</span> · </span>
+              ) : null}
+              Code: <span className="font-mono font-semibold text-foreground">{patient_code}</span>
             </p>
           </div>
         </div>
@@ -281,14 +335,26 @@ const getRiskBadgeVariant = (level: any) => {
               </div>
             </div>
           </div>
-          <div className="border-b border-border/70 bg-background/80 px-6 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <Input
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search records, filename, risk band..."
-              className="max-w-sm"
-            />
-            <p className="text-sm text-muted-foreground">Showing {currentHistory.length} of {filteredHistory.length} records</p>
+          <div className="border-b border-border/70 bg-background/80 px-6 py-4 space-y-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <Input
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search records, filename, risk band..."
+                className="max-w-sm"
+              />
+              <p className="text-sm text-muted-foreground">Showing {currentHistory.length} of {filteredHistory.length} records</p>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <DateRangePicker
+                label="Record date range"
+                range={dateRange}
+                onRangeChange={setDateRange}
+                onClear={() => setDateRange(undefined)}
+                placeholder="Choose date range"
+                className="sm:col-span-2 lg:col-span-3"
+              />
+            </div>
           </div>
 
           <div className="mt-4">
@@ -317,7 +383,7 @@ const getRiskBadgeVariant = (level: any) => {
                 <Table>
                   <TableHeader className="bg-muted/80">
                     <TableRow>
-                      <TableHead className="font-semibold">Filename</TableHead>
+                      <TableHead className="font-semibold">S.No.</TableHead>
                       <TableHead className="font-semibold">Date</TableHead>
                       <TableHead className="font-semibold">Risk Band</TableHead>
                       <TableHead className="font-semibold">Risk %</TableHead>
@@ -333,18 +399,7 @@ const getRiskBadgeVariant = (level: any) => {
                       const mainRow = (
                         <TableRow key={rowId} className="border-b transition-colors hover:bg-muted/50">
                           <TableCell>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span className="text-xs text-muted-foreground truncate block max-w-[200px] overflow-hidden text-ellipsis cursor-help">
-                                    {entry.file_name ?? "No report file"}
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent className="max-w-md break-all">
-                                  {entry.file_name ?? "No report file"}
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
+                            {idx + 1 + (page - 1) * pageSize}
                           </TableCell>
                           <TableCell>{formatDate(entry.report_date ?? entry.created_at)}</TableCell>
                           <TableCell>
@@ -368,7 +423,7 @@ const getRiskBadgeVariant = (level: any) => {
                           <TableCell>
                             {entry.internal_brain_health_score != null ? (
                               <Badge variant={entry.internal_brain_health_score >= 7 ? "default" : entry.internal_brain_health_score >= 4 ? "secondary" : "destructive"} className="font-medium">
-                                {entry.internal_brain_health_score}/10
+                                {parseInt(entry.internal_brain_health_score)}/10
                               </Badge>
                             ) : (
                               <span className="text-muted-foreground">—</span>
@@ -378,182 +433,174 @@ const getRiskBadgeVariant = (level: any) => {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => toggleRowExpansion(rowId)}
+                              onClick={() => toggleRowExpansion(entry.result_id)}
                               className="h-9 w-9 p-0"
                             >
-                              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                              {<ChevronRight className="h-4 w-4" />}
                             </Button>
                           </TableCell>
                         </TableRow>
                       );
 
-                      const detailRow = isExpanded ? (
-                        <TableRow key={`${rowId}-detail`} className="bg-muted/20">
-                          <TableCell colSpan={6} className="p-0">
-                            <div className="border-t border-border px-6 py-6">
-                              <Accordion type="single" collapsible className="w-full">
-                                <AccordionItem value="detailed-analysis" className="border-none">
-                                  <AccordionTrigger className="px-0 py-0 hover:no-underline">
-                                    <div className="flex items-center gap-2 pb-4">
-                                      <Brain className="h-4 w-4" />
-                                      <span className="font-medium">Detailed Analysis & Metrics</span>
-                                    </div>
-                                  </AccordionTrigger>
-                                  <AccordionContent className="px-0 pb-0">
-                                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                                      <div className="space-y-4">
-                                        <h4 className="font-medium text-foreground flex items-center gap-2">
-                                          <Activity className="h-4 w-4" />
-                                          Technical Metrics
-                                        </h4>
-                                        <div className="space-y-3">
-                                          <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
-                                            <span className="text-sm font-medium">Alpha Peak Gradient</span>
-                                            {entry.alpha_peak_gradient != null ? (
-                                              <Badge variant="secondary" className="px-3 py-1.5 text-sm">
-                                                {entry.alpha_peak_gradient.toFixed(2)}
-                                              </Badge>
-                                            ) : (
-                                              <span className="text-muted-foreground">—</span>
-                                            )}
-                                          </div>
-                                          <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
-                                            <span className="text-sm font-medium">CLI</span>
-                                            {entry.cli != null ? (
-                                              <Badge variant="secondary" className="px-3 py-1.5 text-sm">
-                                                {parseInt(entry.cli)}
-                                              </Badge>
-                                            ) : (
-                                              <span className="text-muted-foreground">—</span>
-                                            )}
-                                          </div>
-                                          <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
-                                            <span className="text-sm font-medium">Entropy Gradient</span>
-                                            {entry.entropy_gradient != null ? (
-                                              <Badge variant="secondary" className="px-3 py-1.5 text-sm">
-                                                {entry.entropy_gradient.toFixed(2)}
-                                              </Badge>
-                                            ) : (
-                                              <span className="text-muted-foreground">—</span>
-                                            )}
-                                          </div>
-                                          <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
-                                            <span className="text-sm font-medium">Occipital Entropy</span>
-                                            {entry.occipital_entropy != null ? (
-                                              <Badge variant="secondary" className="px-3 py-1.5 text-sm">
-                                                {entry.occipital_entropy.toFixed(2)}
-                                              </Badge>
-                                            ) : (
-                                              <span className="text-muted-foreground">—</span>
-                                            )}
-                                          </div>
-                                          <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
-                                            <span className="text-sm font-medium">Posterior Dominance Index</span>
-                                            {entry.posterior_dominance_index != null ? (
-                                              <Badge variant="secondary" className="px-3 py-1.5 text-sm">
-                                                {entry.posterior_dominance_index.toFixed(2)}
-                                              </Badge>
-                                            ) : (
-                                              <span className="text-muted-foreground">—</span>
-                                            )}
-                                          </div>
-                                        </div>
-                                      </div>
+                      // const detailRow = isExpanded ? (
+                      //   <TableRow key={`${rowId}-detail`} className="bg-muted/20">
+                      //     <TableCell colSpan={6} className="p-0">
+                      //       <div className="border-t border-border px-6 py-6">
+                      //         <div className="flex items-center gap-2 pb-4">
+                      //           <Brain className="h-4 w-4" />
+                      //           <span className="font-medium">Detailed Analysis & Metrics</span>
+                      //         </div>
+                      //         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                      //           <div className="space-y-4">
+                      //             <h4 className="font-medium text-foreground flex items-center gap-2">
+                      //               <Activity className="h-4 w-4" />
+                      //               Technical Metrics
+                      //             </h4>
+                      //             <div className="space-y-3">
+                      //               <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
+                      //                 <span className="text-sm font-medium">Alpha Peak Gradient</span>
+                      //                 {entry.alpha_peak_gradient != null ? (
+                      //                   <Badge variant="secondary" className="px-3 py-1.5 text-sm">
+                      //                     {entry.alpha_peak_gradient.toFixed(2)}
+                      //                   </Badge>
+                      //                 ) : (
+                      //                   <span className="text-muted-foreground">—</span>
+                      //                 )}
+                      //               </div>
+                      //               <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
+                      //                 <span className="text-sm font-medium">CLI</span>
+                      //                 {entry.cli != null ? (
+                      //                   <Badge variant="secondary" className="px-3 py-1.5 text-sm">
+                      //                     {parseInt(entry.cli)}
+                      //                   </Badge>
+                      //                 ) : (
+                      //                   <span className="text-muted-foreground">—</span>
+                      //                 )}
+                      //               </div>
+                      //               <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
+                      //                 <span className="text-sm font-medium">Entropy Gradient</span>
+                      //                 {entry.entropy_gradient != null ? (
+                      //                   <Badge variant="secondary" className="px-3 py-1.5 text-sm">
+                      //                     {entry.entropy_gradient.toFixed(2)}
+                      //                   </Badge>
+                      //                 ) : (
+                      //                   <span className="text-muted-foreground">—</span>
+                      //                 )}
+                      //               </div>
+                      //               <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
+                      //                 <span className="text-sm font-medium">Occipital Entropy</span>
+                      //                 {entry.occipital_entropy != null ? (
+                      //                   <Badge variant="secondary" className="px-3 py-1.5 text-sm">
+                      //                     {entry.occipital_entropy.toFixed(2)}
+                      //                   </Badge>
+                      //                 ) : (
+                      //                   <span className="text-muted-foreground">—</span>
+                      //                 )}
+                      //               </div>
+                      //               <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
+                      //                 <span className="text-sm font-medium">Posterior Dominance Index</span>
+                      //                 {entry.posterior_dominance_index != null ? (
+                      //                   <Badge variant="secondary" className="px-3 py-1.5 text-sm">
+                      //                     {entry.posterior_dominance_index.toFixed(2)}
+                      //                   </Badge>
+                      //                 ) : (
+                      //                   <span className="text-muted-foreground">—</span>
+                      //                 )}
+                      //               </div>
+                      //             </div>
+                      //           </div>
 
-                                      <div className="space-y-4">
-                                        <h4 className="font-medium text-foreground flex items-center gap-2">
-                                          <TrendingUp className="h-4 w-4" />
-                                          AI Probabilities
-                                        </h4>
-                                        <div className="space-y-3">
-                                          <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
-                                            <span className="text-sm font-medium">DL Probability</span>
-                                            {entry.dl_probability != null ? (
-                                              <Badge variant="secondary" className="px-3 py-1.5 text-sm">
-                                                {(entry.dl_probability * 100).toFixed(1)}%
-                                              </Badge>
-                                            ) : (
-                                              <span className="text-muted-foreground">—</span>
-                                            )}
-                                          </div>
-                                          <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
-                                            <span className="text-sm font-medium">Fusion Probability</span>
-                                            {entry.fusion_probability != null ? (
-                                              <Badge variant="secondary" className="px-3 py-1.5 text-sm">
-                                                {(entry.fusion_probability * 100).toFixed(1)}%
-                                              </Badge>
-                                            ) : (
-                                              <span className="text-muted-foreground">—</span>
-                                            )}
-                                          </div>
-                                          <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
-                                            <span className="text-sm font-medium">ML Probability</span>
-                                            {entry.ml_probability != null ? (
-                                              <Badge variant="secondary" className="px-3 py-1.5 text-sm">
-                                                {(entry.ml_probability * 100).toFixed(1)}%
-                                              </Badge>
-                                            ) : (
-                                              <span className="text-muted-foreground">—</span>
-                                            )}
-                                          </div>
-                                        </div>
-                                      </div>
+                      //           <div className="space-y-4">
+                      //             <h4 className="font-medium text-foreground flex items-center gap-2">
+                      //               <TrendingUp className="h-4 w-4" />
+                      //               AI Probabilities
+                      //             </h4>
+                      //             <div className="space-y-3">
+                      //               <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
+                      //                 <span className="text-sm font-medium">DL Probability</span>
+                      //                 {entry.dl_probability != null ? (
+                      //                   <Badge variant="secondary" className="px-3 py-1.5 text-sm">
+                      //                     {(entry.dl_probability * 100).toFixed(1)}%
+                      //                   </Badge>
+                      //                 ) : (
+                      //                   <span className="text-muted-foreground">—</span>
+                      //                 )}
+                      //               </div>
+                      //               <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
+                      //                 <span className="text-sm font-medium">Fusion Probability</span>
+                      //                 {entry.fusion_probability != null ? (
+                      //                   <Badge variant="secondary" className="px-3 py-1.5 text-sm">
+                      //                     {(entry.fusion_probability * 100).toFixed(1)}%
+                      //                   </Badge>
+                      //                 ) : (
+                      //                   <span className="text-muted-foreground">—</span>
+                      //                 )}
+                      //               </div>
+                      //               <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
+                      //                 <span className="text-sm font-medium">ML Probability</span>
+                      //                 {entry.ml_probability != null ? (
+                      //                   <Badge variant="secondary" className="px-3 py-1.5 text-sm">
+                      //                     {(entry.ml_probability * 100).toFixed(1)}%
+                      //                   </Badge>
+                      //                 ) : (
+                      //                   <span className="text-muted-foreground">—</span>
+                      //                 )}
+                      //               </div>
+                      //             </div>
+                      //           </div>
 
-                                      <div className="space-y-4">
-                                        <h4 className="font-medium text-foreground">Additional Information</h4>
-                                        <div className="space-y-3">
-                                          <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
-                                            <span className="text-sm font-medium">Brain Health Score</span>
-                                            {entry.internal_brain_health_score != null ? (
-                                              <Badge variant={entry.internal_brain_health_score >= 7 ? "default" : entry.internal_brain_health_score >= 4 ? "secondary" : "destructive"} className="px-3 py-1.5 text-sm">
-                                                {entry.internal_brain_health_score}/10
-                                              </Badge>
-                                            ) : (
-                                              <span className="text-muted-foreground">—</span>
-                                            )}
-                                          </div>
-                                          <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
-                                            <span className="text-sm font-medium">NIS</span>
-                                            {entry.nis != null ? (
-                                              <Badge variant="secondary" className="px-3 py-1.5 text-sm">
-                                                {parseInt(entry.nis)}
-                                              </Badge>
-                                            ) : (
-                                              <span className="text-muted-foreground">—</span>
-                                            )}
-                                          </div>
-                                          <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
-                                            <span className="text-sm font-medium">PCR</span>
-                                            {entry.pcr != null ? (
-                                              <Badge variant="secondary" className="px-3 py-1.5 text-sm">
-                                                {parseInt(entry.pcr)}
-                                              </Badge>
-                                            ) : (
-                                              <span className="text-muted-foreground">—</span>
-                                            )}
-                                          </div>
-                                          <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
-                                            <span className="text-sm font-medium">Theta Alpha Ratio</span>
-                                            {entry.theta_alpha_ratio_frontal != null ? (
-                                              <Badge variant="secondary" className="px-3 py-1.5 text-sm">
-                                                {entry.theta_alpha_ratio_frontal.toFixed(3)}
-                                              </Badge>
-                                            ) : (
-                                              <span className="text-muted-foreground">—</span>
-                                            )}
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </AccordionContent>
-                                </AccordionItem>
-                              </Accordion>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ) : null;
+                      //           <div className="space-y-4">
+                      //             <h4 className="font-medium text-foreground">Additional Information</h4>
+                      //             <div className="space-y-3">
+                      //               <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
+                      //                 <span className="text-sm font-medium">Brain Health Score</span>
+                      //                 {entry.internal_brain_health_score != null ? (
+                      //                   <Badge variant={entry.internal_brain_health_score >= 7 ? "default" : entry.internal_brain_health_score >= 4 ? "secondary" : "destructive"} className="px-3 py-1.5 text-sm">
+                      //                     {entry.internal_brain_health_score}/10
+                      //                   </Badge>
+                      //                 ) : (
+                      //                   <span className="text-muted-foreground">—</span>
+                      //                 )}
+                      //               </div>
+                      //               <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
+                      //                 <span className="text-sm font-medium">NIS</span>
+                      //                 {entry.nis != null ? (
+                      //                   <Badge variant="secondary" className="px-3 py-1.5 text-sm">
+                      //                     {parseInt(entry.nis)}
+                      //                   </Badge>
+                      //                 ) : (
+                      //                   <span className="text-muted-foreground">—</span>
+                      //                 )}
+                      //               </div>
+                      //               <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
+                      //                 <span className="text-sm font-medium">PCR</span>
+                      //                 {entry.pcr != null ? (
+                      //                   <Badge variant="secondary" className="px-3 py-1.5 text-sm">
+                      //                     {parseInt(entry.pcr)}
+                      //                   </Badge>
+                      //                 ) : (
+                      //                   <span className="text-muted-foreground">—</span>
+                      //                 )}
+                      //               </div>
+                      //               <div className="flex justify-between items-center gap-4 p-3 bg-background rounded-lg border">
+                      //                 <span className="text-sm font-medium">Theta Alpha Ratio</span>
+                      //                 {entry.theta_alpha_ratio_frontal != null ? (
+                      //                   <Badge variant="secondary" className="px-3 py-1.5 text-sm">
+                      //                     {entry.theta_alpha_ratio_frontal.toFixed(3)}
+                      //                   </Badge>
+                      //                 ) : (
+                      //                   <span className="text-muted-foreground">—</span>
+                      //                 )}
+                      //               </div>
+                      //             </div>
+                      //           </div>
+                      //         </div>
+                      //       </div>
+                      //     </TableCell>
+                      //   </TableRow>
+                      // ) : null;
 
-                      return [mainRow, detailRow];
+                      return [mainRow];
                     })}
                   </TableBody>
                 </Table>

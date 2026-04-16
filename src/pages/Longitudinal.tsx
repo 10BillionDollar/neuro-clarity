@@ -3,6 +3,8 @@ import { useParams } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { longitudinal } from "@/app/patients";
+import { useEffect } from "react";
 import {
   Table,
   TableBody,
@@ -115,8 +117,21 @@ const getRiskBadgeVariant = (level: string) => {
   }
 };
 
+
+
 const Longitudinal = () => {
   const { patientId } = useParams();
+   useEffect(() => {
+  longitudinal(patient.id, { /* payload if needed */ })
+    .then(data => {
+      console.log("Longitudinal data updated:", data);
+      // Update state with new longitudinal data if necessary
+    })
+    .catch(error => {
+      console.error("Error updating longitudinal data:", error);
+    });
+
+ }, []);
 
   return (
     <MainLayout>

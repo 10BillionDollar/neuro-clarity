@@ -1,6 +1,7 @@
 import { Eye, TrendingUp, Pencil, Trash2, Plus, History } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DateRangePicker, type DateRange } from "@/components/ui/date-range-picker";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -83,9 +84,26 @@ const PATIENTS_SESSION_KEY = "patientTableData";
 export function ReportTable({ patients, selectedPatientId, onEditPatient, onDeletePatient, onAddPatient, loading = false }: ReportTableProps) {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
+  const [dateRange, setDateRange] = useState<DateRange>();
   const [page, setPage] = useState(1);
   const [cachedPatients, setCachedPatients] = useState<Patient[]>(patients ?? []);
   const pageSize = 8;
+
+  const isDateInRange = (dateStr: string | undefined): boolean => {
+    if (!dateStr) return true;
+    try {
+      const date = new Date(dateStr);
+      if (dateRange.from && date < dateRange.from) return false;
+      if (dateRange.to) {
+        const to = new Date(dateRange.to);
+        to.setHours(23, 59, 59, 999);
+        if (date > to) return false;
+      }
+      return true;
+    } catch {
+      return true;
+    }
+  };
 
   useEffect(() => {
     if (patients.length > 0) {
@@ -114,6 +132,10 @@ export function ReportTable({ patients, selectedPatientId, onEditPatient, onDele
   const normalizedSearch = searchTerm.toLowerCase().trim();
   const allPatients = cachedPatients ?? [];
   const filteredPatients = allPatients.filter((patient) => {
+    // Date range filter
+    if (!isDateInRange(patient.latestEEGDate)) return false;
+
+    // Search filter
     if (!normalizedSearch) return true;
     return [
       patient.name,
@@ -137,7 +159,7 @@ export function ReportTable({ patients, selectedPatientId, onEditPatient, onDele
 
   useEffect(() => {
     setPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, dateRange]);
 
   const currentPatients = filteredPatients.slice((page - 1) * pageSize, page * pageSize);
 
@@ -240,14 +262,26 @@ export function ReportTable({ patients, selectedPatientId, onEditPatient, onDele
           </Button>
         )}
       </div>
-      <div className="border-b border-border/70 bg-background/80 px-4 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Input
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-          placeholder="Search patients, ID, risk band..."
-          className="max-w-sm"
-        />
-        <p className="text-sm text-muted-foreground">Showing {currentPatients.length} of {filteredPatients.length} patients</p>
+      <div className="border-b border-border/70 bg-background/80 px-4 py-4 space-y-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <Input
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Search patients, ID, risk band..."
+            className="max-w-sm"
+          />
+          <p className="text-sm text-muted-foreground">Showing {currentPatients.length} of {filteredPatients.length} patients</p>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <DateRangePicker
+            label="Screening date range"
+            range={dateRange}
+            onRangeChange={setDateRange}
+            onClear={() => setDateRange({})}
+            placeholder="Choose a date range"
+            className="sm:col-span-2 lg:col-span-3"
+          />
+        </div>
       </div>
 
         <Table>
@@ -395,7 +429,7 @@ export function ReportTable({ patients, selectedPatientId, onEditPatient, onDele
                         <Button
                          variant="ghost" 
                           size="sm"
-                          onClick={() => navigate(`/patient-history/${patient.patient_code}`)}
+                          onClick={() => navigate(`/patient-history/${patient.patient_code}`, { state: { patient } })}
                           title="View Screening History"
                         >
                           <Eye className="mr-1 h-4 w-4" />

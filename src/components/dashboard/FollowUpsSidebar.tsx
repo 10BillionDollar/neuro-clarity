@@ -30,7 +30,7 @@ export function FollowUpsSidebar() {
     <div className="clinical-card h-fit">
       <div className="mb-4 flex items-center gap-2">
         <Calendar className="h-5 w-5 text-primary" />
-        <h3 className="text-lg font-semibold text-foreground">Upcoming Follow-Ups</h3>
+        <h3 className="text-lg font-semibold text-foreground">Upcoming Follow-Ups <span className="text-xs text-muted-foreground">(To be launched)</span></h3>
       </div>
 
       <div className="flex flex-col gap-3">

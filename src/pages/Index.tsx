@@ -22,12 +22,35 @@ interface Patient {
 const Index = () => {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
+  const [todaysScreenCount, setTodaysScreenCount] = useState(0);
+  const [highRiskCount, setHighRiskCount] = useState(0);
+
+  // Function to check if date is today
+  const isToday = (dateString: string | undefined): boolean => {
+    if (!dateString) return false;
+    const today = new Date();
+    const checkDate = new Date(dateString);
+    return (
+      checkDate.getDate() === today.getDate() &&
+      checkDate.getMonth() === today.getMonth() &&
+      checkDate.getFullYear() === today.getFullYear()
+    );
+  };
+
+  // Function to check if risk level is high (includes all "high" risk types)
+  const isHighRisk = (riskLevel: string | undefined): boolean => {
+    if (!riskLevel) return false;
+    const risk = riskLevel.toLowerCase();
+    console.log("Checking risk level:", riskLevel, "-> includes high:", risk.includes("high"));
+    return risk.includes("high");
+  };
 
   useEffect(() => {
     const fetchPatients = async () => {
       try {
         const data = await getPatientsDb();
         const patientList = Array.isArray(data) ? data : data?.patients ?? [];
+        console.log("Fetched patients:", patientList);
 
         // Fetch latest screening data for each patient
         const patientsWithScreenings = await Promise.all(
@@ -35,6 +58,7 @@ const Index = () => {
             try {
               const history = await getPatientHistory(patient.patient_code);
               const latestScreening = history && history.length > 0 ? history[0] : null;
+              console.log(`Patient ${patient.patient_code} - Latest screening:`, latestScreening);
               return {
                 ...patient,
                 latestEEGDate: latestScreening?.date || latestScreening?.created_at || latestScreening?.report_date,
@@ -50,7 +74,20 @@ const Index = () => {
           })
         );
 
+        console.log("Patients with screenings:", patientsWithScreenings);
         setPatients(patientsWithScreenings);
+
+        // Calculate today's screens and high-risk counts
+        const todaysCount = patientsWithScreenings.filter(p => {
+          const result = p.risk_band
+          return result;
+        }).length;
+
+        const highRiskChecks = patientsWithScreenings.filter(p => p.risk_band === "High Cognitive Risk").length;
+
+        console.log("Today's count:", todaysCount, "High-risk count:", highRiskChecks);
+        setTodaysScreenCount(todaysCount);
+        setHighRiskCount(highRiskChecks);
       } catch (error) {
         console.error('Error fetching patients:', error);
       } finally {
@@ -73,15 +110,14 @@ const Index = () => {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatsCard
             title="Today's Screens"
-            value={14}
-            subtitle="3 more than yesterday"
+            value={todaysScreenCount}
+            subtitle={todaysScreenCount === 0 ? "No screenings today" : `${todaysScreenCount} screenings completed`}
             icon={Activity}
-            trend={{ value: 12, positive: true }}
           />
           <StatsCard
             title="High-Risk Detected"
-            value={3}
-            subtitle="Requires attention"
+            value={highRiskCount}
+            subtitle={highRiskCount === 0 ? "No high-risk cases" : `${highRiskCount} high-risk cases found`}
             icon={AlertTriangle}
             variant="danger"
           />

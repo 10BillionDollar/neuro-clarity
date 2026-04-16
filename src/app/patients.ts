@@ -67,6 +67,14 @@ export async function editPatient(patientCode: string, payload: Partial<PatientP
   return handleResponse(res);
 }
 
+export async function longitudinal(patientCode: string, payload: Partial<PatientPayload>) {
+  const res = await fetchWithAuth(`${API_BASE_URL}/longitudinal/${patientCode}`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  });
+  return handleResponse(res);
+}
+
 export async function deletePatient(patientCode: string) {
   const res = await fetchWithAuth(`${API_BASE_URL}/delete-patient/${patientCode}`, {
     method: "DELETE",
