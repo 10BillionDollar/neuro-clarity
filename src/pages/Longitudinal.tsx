@@ -1,10 +1,11 @@
-import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { longitudinal } from "@/app/patients";
-import { useEffect } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { longitudinal, getPatientsDb } from "@/app/patients";
+import { getRiskLevelFromPercentage, getRiskBadgeVariantFromPercentage, getRiskLevelText, getRiskBadgeVariant } from "@/lib/riskUtils";
 import {
   Table,
   TableBody,
@@ -13,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Brain, Calendar, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Brain, Calendar, TrendingUp, TrendingDown, Minus, Users } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -25,75 +26,123 @@ import {
   Legend,
 } from "recharts";
 
-// Mock longitudinal data
-const patient = {
-  id: "P001",
-  name: "Rajesh Kumar",
-  age: 68,
-  sex: "M",
-  totalVisits: 5,
-};
+const Longitudinal = () => {
+  const { patientId } = useParams();
+  const navigate = useNavigate();
+  const [allPatients, setAllPatients] = useState<any[]>([]);
+  const [selectedPatient, setSelectedPatient] = useState(patientId || '');
 
-const longitudinalData = [
-  { date: "Jan 2023", riskScore: 58, brainAge: 72, pdr: 8.8, cdi: 1.4, quality: 85 },
-  { date: "Apr 2023", riskScore: 62, brainAge: 73, pdr: 8.6, cdi: 1.5, quality: 88 },
-  { date: "Jul 2023", riskScore: 68, brainAge: 74, pdr: 8.4, cdi: 1.6, quality: 86 },
-  { date: "Oct 2023", riskScore: 72, brainAge: 75, pdr: 8.2, cdi: 1.7, quality: 90 },
-  { date: "Jan 2024", riskScore: 78, brainAge: 76, pdr: 8.1, cdi: 1.8, quality: 88 },
-];
+  useEffect(() => {
+    const loadPatients = async () => {
+      try {
+        const data = await getPatientsDb();
+        const patients = Array.isArray(data) ? data : data?.patients ?? [];
+        setAllPatients(patients);
+      } catch (error) {
+        console.error('Error loading patients:', error);
+      }
+    };
 
-const visitHistory = [
-  { 
-    date: "2024-01-15", 
-    riskScore: 78, 
-    riskLevel: "high", 
-    brainAge: 76, 
-    pdr: 8.1, 
-    cdi: 1.8, 
-    quality: 88,
-    notes: "Progressive decline observed"
-  },
-  { 
-    date: "2023-10-20", 
-    riskScore: 72, 
-    riskLevel: "high", 
-    brainAge: 75, 
-    pdr: 8.2, 
-    cdi: 1.7, 
-    quality: 90,
-    notes: "Continued slowing trend"
-  },
-  { 
-    date: "2023-07-12", 
-    riskScore: 68, 
-    riskLevel: "moderate", 
-    brainAge: 74, 
-    pdr: 8.4, 
-    cdi: 1.6, 
-    quality: 86,
-    notes: "Mild deterioration"
-  },
-  { 
-    date: "2023-04-05", 
-    riskScore: 62, 
-    riskLevel: "moderate", 
-    brainAge: 73, 
-    pdr: 8.6, 
-    cdi: 1.5, 
-    quality: 88,
-    notes: "Baseline elevated"
-  },
-  { 
-    date: "2023-01-18", 
-    riskScore: 58, 
-    riskLevel: "moderate", 
-    brainAge: 72, 
-    pdr: 8.8, 
-    cdi: 1.4, 
-    quality: 85,
-    notes: "Initial screening"
-  },
-];
+    loadPatients();
+  }, []);
+
+  const handlePatientChange = (patientCode: string) => {
+    setSelectedPatient(patientCode);
+    navigate(`/longitudinal/${patientCode}`);
+  };
+  const [patientData, setPatientData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchPatientData = async () => {
+      try {
+        setLoading(true);
+        const data = await longitudinal(patientId || 'P001', {});
+        setPatientData(data);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching patient data:', err);
+        setError('No data available');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPatientData();
+  }, [patientId]);
+
+  // Transform API data to chart format
+  const transformChartData = (apiData) => {
+    if (!apiData?.charts) return [];
+    
+    const dates = [...new Set([
+      ...apiData.charts.pdr.map(item => item.date),
+      ...apiData.charts.quality.map(item => item.date)
+    ])];
+    
+    return dates.map(date => ({
+      date,
+      riskScore: apiData.charts.risk_trend.find(item => item.date === date)?.value || 0,
+      pdr: apiData.charts.pdr.find(item => item.date === date)?.value || 0,
+      quality: apiData.charts.quality.find(item => item.date === date)?.value || 0,
+      thetaAlphaRatio: apiData.charts.theta_alpha_ratio.find(item => item.date === date)?.value || 0,
+    }));
+  };
+
+  const chartData = transformChartData(patientData);
+  const visitHistory = patientData?.history || [];
+  const patient = patientData?.patient_info || { name: 'Loading...', age: 0, gender: 'F' };
+
+  if (loading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <Select value={selectedPatient} onValueChange={handlePatientChange}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Select patient" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allPatients.map((patient: any) => (
+                      <SelectItem key={patient.patient_code} value={patient.patient_code}>
+                        {patient.name} ({patient.patient_code.toUpperCase()})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-muted-foreground">Loading patient data...</div>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <MainLayout>
+        <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <Select value={selectedPatient} onValueChange={handlePatientChange}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Select patient" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allPatients.map((patient: any) => (
+                      <SelectItem key={patient.patient_code} value={patient.patient_code}>
+                        {patient.name} ({patient.patient_code.toUpperCase()})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-destructive">{error}</div>
+        </div>
+      </MainLayout>
+    );
+  }
 
 const getTrendIcon = (current: number, previous: number | undefined, lowerIsBetter: boolean = false) => {
   if (!previous) return <Minus className="h-4 w-4 text-muted-foreground" />;
@@ -108,8 +157,29 @@ const getTrendIcon = (current: number, previous: number | undefined, lowerIsBett
   );
 };
 
+// Common function to determine risk level based on percentage
+const getRiskLevelFromPercentage = (percentage: number) => {
+  if (percentage >= 70) return "high";
+  if (percentage >= 40) return "moderate";
+  return "low";
+};
+
+// Common function to get risk badge variant based on percentage
+const getRiskBadgeVariantFromPercentage = (percentage: number) => {
+  const riskLevel = getRiskLevelFromPercentage(percentage);
+  switch (riskLevel) {
+    case "high": return "riskHigh";
+    case "moderate": return "riskModerate";
+    case "low": return "riskLow";
+    default: return "secondary";
+  }
+};
+
+// Legacy function for backward compatibility
 const getRiskBadgeVariant = (level: string) => {
-  switch (level) {
+  if (!level) return "secondary";
+  
+  switch (level.toLowerCase()) {
     case "high": return "riskHigh";
     case "moderate": return "riskModerate";
     case "low": return "riskLow";
@@ -119,37 +189,44 @@ const getRiskBadgeVariant = (level: string) => {
 
 
 
-const Longitudinal = () => {
-  const { patientId } = useParams();
-   useEffect(() => {
-  longitudinal(patient.id, { /* payload if needed */ })
-    .then(data => {
-      console.log("Longitudinal data updated:", data);
-      // Update state with new longitudinal data if necessary
-    })
-    .catch(error => {
-      console.error("Error updating longitudinal data:", error);
-    });
-
- }, []);
 
   return (
     <MainLayout>
-      <div className="space-y-6">
+      <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <Select value={selectedPatient} onValueChange={handlePatientChange}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Select patient" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allPatients.map((patient: any) => (
+                      <SelectItem key={patient.patient_code} value={patient.patient_code}>
+                        {patient.name} ({patient.patient_code.toUpperCase()})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+      <div className="space-y-6 mt-4">
         {/* Patient Header */}
         <div className="flex items-center gap-4">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
             <Brain className="h-7 w-7 text-primary" />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">{patient.name}</h1>
-            <div className="flex items-center gap-3 text-sm text-muted-foreground">
-              <span>{patient.age} years / {patient.sex}</span>
-              <span>•</span>
-              <span className="flex items-center gap-1">
-                <Calendar className="h-4 w-4" />
-                {patient.totalVisits} screenings over 12 months
-              </span>
+          <div className="flex-1">
+            <div className="flex items-center gap-4">
+              <div>
+                <h1 className="text-2xl font-bold text-foreground">{patient.name}</h1>
+                <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                  <span>{patient.age} years / {patient.sex}</span>
+                  <span>•</span>
+                  <span className="flex items-center gap-1">
+                    <Calendar className="h-4 w-4" />
+                    {patient.totalVisits} screenings over 12 months
+                  </span>
+                </div>
+              </div>
+              
             </div>
           </div>
         </div>
@@ -164,14 +241,14 @@ const Longitudinal = () => {
           {/* Marker Trends Tab */}
           <TabsContent value="markers" className="space-y-6">
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              {/* Brain Age Chart */}
+              {/* Risk Trend Chart */}
               <div className="clinical-card">
-                <h3 className="mb-4 font-semibold text-foreground">Brain Age Over Time</h3>
+                <h3 className="mb-4 font-semibold text-foreground">Risk Score Trend</h3>
                 <ResponsiveContainer width="100%" height={250}>
-                  <LineChart data={longitudinalData}>
+                  <LineChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-                    <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} domain={[68, 80]} />
+                    <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} domain={[0, 100]} />
                     <Tooltip 
                       contentStyle={{ 
                         backgroundColor: 'hsl(var(--card))', 
@@ -180,7 +257,7 @@ const Longitudinal = () => {
                       }} 
                     />
                     <Legend />
-                    <Line type="monotone" dataKey="brainAge" stroke="hsl(var(--chart-primary))" strokeWidth={2} name="Brain Age" dot={{ fill: 'hsl(var(--chart-primary))' }} />
+                    <Line type="monotone" dataKey="riskScore" stroke="hsl(var(--chart-primary))" strokeWidth={2} name="Risk Score" dot={{ fill: 'hsl(var(--chart-primary))' }} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -189,10 +266,10 @@ const Longitudinal = () => {
               <div className="clinical-card">
                 <h3 className="mb-4 font-semibold text-foreground">Posterior Dominant Rhythm (PDR)</h3>
                 <ResponsiveContainer width="100%" height={250}>
-                  <LineChart data={longitudinalData}>
+                  <LineChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-                    <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} domain={[7.5, 9.5]} />
+                    <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} domain={[0, 5]} />
                     <Tooltip 
                       contentStyle={{ 
                         backgroundColor: 'hsl(var(--card))', 
@@ -201,22 +278,22 @@ const Longitudinal = () => {
                       }} 
                     />
                     <Legend />
-                    <Line type="monotone" dataKey="pdr" stroke="hsl(var(--risk-moderate))" strokeWidth={2} name="PDR (Hz)" dot={{ fill: 'hsl(var(--risk-moderate))' }} />
+                    <Line type="monotone" dataKey="pdr" stroke="hsl(var(--risk-moderate))" strokeWidth={2} name="PDR" dot={{ fill: 'hsl(var(--risk-moderate))' }} />
                   </LineChart>
                 </ResponsiveContainer>
                 <p className="mt-2 text-xs text-muted-foreground text-center">
-                  Normal range: 9.5–10.5 Hz (lower values indicate slowing)
+                  PDR values (lower values indicate slowing)
                 </p>
               </div>
 
-              {/* Cognitive Decline Index */}
+              {/* Theta/Alpha Ratio */}
               <div className="clinical-card">
-                <h3 className="mb-4 font-semibold text-foreground">Cognitive Decline Index</h3>
+                <h3 className="mb-4 font-semibold text-foreground">Theta/Alpha Ratio</h3>
                 <ResponsiveContainer width="100%" height={250}>
-                  <LineChart data={longitudinalData}>
+                  <LineChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-                    <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} domain={[1, 2]} />
+                    <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} domain={[0, 2]} />
                     <Tooltip 
                       contentStyle={{ 
                         backgroundColor: 'hsl(var(--card))', 
@@ -225,11 +302,11 @@ const Longitudinal = () => {
                       }} 
                     />
                     <Legend />
-                    <Line type="monotone" dataKey="cdi" stroke="hsl(var(--risk-high))" strokeWidth={2} name="CDI Ratio" dot={{ fill: 'hsl(var(--risk-high))' }} />
+                    <Line type="monotone" dataKey="thetaAlphaRatio" stroke="hsl(var(--risk-high))" strokeWidth={2} name="Theta/Alpha Ratio" dot={{ fill: 'hsl(var(--risk-high))' }} />
                   </LineChart>
                 </ResponsiveContainer>
                 <p className="mt-2 text-xs text-muted-foreground text-center">
-                  Normal range: 0.8–1.2 (higher values suggest cognitive slowing)
+                  Higher values suggest cognitive slowing
                 </p>
               </div>
 
@@ -237,10 +314,10 @@ const Longitudinal = () => {
               <div className="clinical-card">
                 <h3 className="mb-4 font-semibold text-foreground">EEG Signal Quality</h3>
                 <ResponsiveContainer width="100%" height={250}>
-                  <LineChart data={longitudinalData}>
+                  <LineChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-                    <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} domain={[70, 100]} />
+                    <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} domain={[0, 100]} />
                     <Tooltip 
                       contentStyle={{ 
                         backgroundColor: 'hsl(var(--card))', 
@@ -261,7 +338,7 @@ const Longitudinal = () => {
             <div className="clinical-card">
               <h3 className="mb-4 font-semibold text-foreground">Risk Score Trajectory</h3>
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={longitudinalData}>
+                <LineChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
                   <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} domain={[0, 100]} />
@@ -306,9 +383,10 @@ const Longitudinal = () => {
                 <TableHead className="font-semibold">Date</TableHead>
                 <TableHead className="font-semibold">Risk Score</TableHead>
                 <TableHead className="font-semibold">Risk Level</TableHead>
-                <TableHead className="font-semibold">Brain Age</TableHead>
-                <TableHead className="font-semibold">PDR (Hz)</TableHead>
-                <TableHead className="font-semibold">CDI</TableHead>
+                {/* <TableHead className="font-semibold">Brain Age</TableHead> */}
+                <TableHead className="font-semibold">PDR</TableHead>
+                <TableHead className="font-semibold">Theta/Alpha Ratio</TableHead>
+                {/* <TableHead className="font-semibold">CDI</TableHead> */}
                 <TableHead className="font-semibold">Quality</TableHead>
                 <TableHead className="font-semibold">Notes</TableHead>
               </TableRow>
@@ -323,35 +401,41 @@ const Longitudinal = () => {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold">{visit.riskScore}%</span>
+                        <Badge variant={getRiskBadgeVariantFromPercentage(parseInt(visit.risk_score))} className="font-semibold">
+                          {parseInt(visit.risk_score)}%
+                        </Badge>
                         {getTrendIcon(visit.riskScore, prevVisit?.riskScore)}
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={getRiskBadgeVariant(visit.riskLevel)}>
-                        {visit.riskLevel.charAt(0).toUpperCase() + visit.riskLevel.slice(1)}
+                      <Badge variant={getRiskBadgeVariantFromPercentage(parseInt(visit.risk_score))}>
+                        {getRiskLevelFromPercentage(parseInt(visit.risk_score)).charAt(0).toUpperCase() + getRiskLevelFromPercentage(parseInt(visit.risk_score)).slice(1)} Risk
                       </Badge>
                     </TableCell>
-                    <TableCell>
+                    {/* <TableCell>
                       <div className="flex items-center gap-2">
-                        <span>{visit.brainAge} yrs</span>
-                        {getTrendIcon(visit.brainAge, prevVisit?.brainAge)}
+                        <span>{visit.brain_age || 'N/A'}</span>
                       </div>
-                    </TableCell>
+                    </TableCell> */}
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <span>{visit.pdr}</span>
+                        <span>{parseInt(visit.pdr)}</span>
                         {getTrendIcon(visit.pdr, prevVisit?.pdr, true)}
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <span>{visit.cdi}</span>
-                        {getTrendIcon(visit.cdi, prevVisit?.cdi)}
+                        <span>{parseInt(visit.theta_alpha_ratio)}</span>
+                        {getTrendIcon(visit.theta_alpha_ratio, prevVisit?.theta_alpha_ratio)}
                       </div>
                     </TableCell>
+                    {/* <TableCell>
+                      <div className="flex items-center gap-2">
+                        <span>{visit.cdi || 'N/A'}</span>
+                      </div>
+                    </TableCell> */}
                     <TableCell>
-                      <Badge variant={visit.quality >= 85 ? "qualityGood" : "qualityFair"}>
+                      <Badge variant={visit.quality >= 50 ? "qualityGood" : "qualityFair"}>
                         {visit.quality}%
                       </Badge>
                     </TableCell>

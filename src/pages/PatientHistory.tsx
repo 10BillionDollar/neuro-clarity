@@ -29,7 +29,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { getPatientById, getPatientHistory } from "@/app/patients";
-import { ArrowLeft, Clock, ChevronDown, ChevronRight, TrendingUp, Activity, Brain, Eye } from "lucide-react";
+import { getRiskBadgeVariantFromPercentage, getRiskLevelFromPercentage, getRiskLevelText } from "@/lib/riskUtils";
+import { ArrowLeft, Clock, ChevronDown, ChevronRight, TrendingUp, Activity, Brain, Eye, TrendingDown, Minus } from "lucide-react";
 
 interface HistoryEntry {
   id?: number | string;
@@ -61,29 +62,73 @@ export default function PatientHistory() {
   const parseDate = (dateStr: string | undefined): Date | null => {
     if (!dateStr) return null;
     try {
-      return new Date(dateStr);
+      // Handle different date formats
+      let date: Date;
+      
+      // Try parsing as ISO date first
+      if (dateStr.includes('T') || dateStr.includes('-')) {
+        date = new Date(dateStr);
+      } else {
+        // Try parsing as DD/MM/YYYY or other formats
+        const parts = dateStr.split(/[/\-.]/);
+        if (parts.length === 3) {
+          // Try DD/MM/YYYY
+          if (parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+            date = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+          } else {
+            date = new Date(dateStr);
+          }
+        } else {
+          date = new Date(dateStr);
+        }
+      }
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) return null;
+      
+      return date;
     } catch {
       return null;
     }
   };
 
   const isDateInRange = (dateStr: string | undefined): boolean => {
-    if (!dateStr) return true;
+    if (!dateStr) return false; // Return false for undefined dates to exclude them
     const date = parseDate(dateStr);
-    if (!date) return true;
+    if (!date) return false;
 
-    if (dateRange?.from && date < dateRange.from) return false;
-    if (dateRange?.to) {
-      const to = new Date(dateRange.to);
-      to.setHours(23, 59, 59, 999);
-      if (date > to) return false;
+    // Normalize dates to compare only date parts (not time)
+    const compareDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    
+    if (dateRange?.from) {
+      const fromDate = new Date(dateRange.from.getFullYear(), dateRange.from.getMonth(), dateRange.from.getDate());
+      if (compareDate < fromDate) return false;
     }
+    
+    if (dateRange?.to) {
+      const toDate = new Date(dateRange.to.getFullYear(), dateRange.to.getMonth(), dateRange.to.getDate());
+      if (compareDate > toDate) return false;
+    }
+    
     return true;
   };
 
-  const toggleRowExpansion = (rowId: string | number) => {
+  const getTrendIcon = (current: number, previous: number | undefined, lowerIsBetter: boolean = false) => {
+  if (!previous) return <Minus className="h-4 w-4 text-muted-foreground" />;
+  const increased = current > previous;
+  const isGood = lowerIsBetter ? !increased : increased;
+  
+  if (current === previous) return <Minus className="h-4 w-4 text-muted-foreground" />;
+  return increased ? (
+    <TrendingUp className={`h-4 w-4 ${isGood ? "text-risk-low" : "text-risk-high"}`} />
+  ) : (
+    <TrendingDown className={`h-4 w-4 ${isGood ? "text-risk-low" : "text-risk-high"}`} />
+  );
+};
+
+const toggleRowExpansion = (rowId: string | number) => {
   //  console.log(rowId,"rowId")
-  navigate(`/report/${rowId}`, { state: { patientCode: patient_code, reportId: rowId } });
+  navigate(`/report/${rowId}`, { state: { patientCode: patient_code, reportId: rowId, fromPatientHistory: true } });
   };
 
   // console.log(,"navigate")
@@ -168,9 +213,11 @@ const getRiskBadgeVariant = (level: any) => {
 
   const normalizedSearch = searchTerm.toLowerCase().trim();
   const filteredHistory = history.filter((entry) => {
-    // Date range filter
-    const dateField = entry.report_date || entry.created_at;
-    if (!isDateInRange(dateField)) return false;
+    // Date range filter - only apply if date range is set
+    if (dateRange?.from || dateRange?.to) {
+      const dateField = entry.report_date || entry.created_at;
+      if (!isDateInRange(dateField)) return false;
+    }
 
     // Search filter
     if (!normalizedSearch) return true;
@@ -385,9 +432,12 @@ const getRiskBadgeVariant = (level: any) => {
                     <TableRow>
                       <TableHead className="font-semibold">S.No.</TableHead>
                       <TableHead className="font-semibold">Date</TableHead>
-                      <TableHead className="font-semibold">Risk Band</TableHead>
-                      <TableHead className="font-semibold">Risk %</TableHead>
-                      <TableHead className="font-semibold">Brain Health</TableHead>
+                      <TableHead className="font-semibold">Risk Score</TableHead>
+                      <TableHead className="font-semibold">Risk Level</TableHead>
+                      {/* <TableHead className="font-semibold">Brain Age</TableHead> */}
+                      <TableHead className="font-semibold">PDR (Hz)</TableHead>
+                      <TableHead className="font-semibold">CDI</TableHead>
+                      <TableHead className="font-semibold">Quality</TableHead>
                       <TableHead className="font-semibold text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -403,9 +453,9 @@ const getRiskBadgeVariant = (level: any) => {
                           </TableCell>
                           <TableCell>{formatDate(entry.report_date ?? entry.created_at)}</TableCell>
                           <TableCell>
-                            {entry.risk_band ? (
-                              <Badge variant={getRiskBadgeVariant(entry.risk_band)} className="font-medium">
-                                {entry.risk_band}
+                            {entry.risk_percent != null ? (
+                              <Badge variant={getRiskBadgeVariantFromPercentage(entry.risk_percent)} className="font-medium">
+                                {getRiskLevelText(entry.risk_percent)}
                               </Badge>
                             ) : (
                               <span className="text-muted-foreground">—</span>
@@ -413,31 +463,87 @@ const getRiskBadgeVariant = (level: any) => {
                           </TableCell>
                           <TableCell>
                             {entry.risk_percent != null ? (
-                              <Badge variant={getQualityBadgeVariant(entry.risk_percent)} className={`font-semibold }`}>
-                                {entry.risk_percent.toFixed(1)}%
-                              </Badge>
+                              <div className="flex items-center gap-2">
+                                <Badge variant={getRiskBadgeVariantFromPercentage(entry.risk_percent)} className="font-semibold">
+                                  {entry.risk_percent.toFixed(1)}%
+                                </Badge>
+                                {getTrendIcon(entry.risk_percent, currentHistory[idx + 1]?.risk_percent)}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          {/* <TableCell>
+                            {entry.brain_age != null ? (
+                              <div className="flex items-center gap-2">
+                                <span>{entry.brain_age}</span>
+                                {getTrendIcon(entry.brain_age, currentHistory[idx + 1]?.brain_age, true)}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell> */}
+                          <TableCell>
+                            {entry.pdr != null ? (
+                              <div className="flex items-center gap-2">
+                                <span>{entry.pdr} Hz</span>
+                                {getTrendIcon(entry.pdr, currentHistory[idx + 1]?.pdr, true)}
+                              </div>
                             ) : (
                               <span className="text-muted-foreground">—</span>
                             )}
                           </TableCell>
                           <TableCell>
-                            {entry.internal_brain_health_score != null ? (
-                              <Badge variant={entry.internal_brain_health_score >= 7 ? "default" : entry.internal_brain_health_score >= 4 ? "secondary" : "destructive"} className="font-medium">
-                                {parseInt(entry.internal_brain_health_score)}/10
-                              </Badge>
+                            {entry.cdi != null ? (
+                              <div className="flex items-center gap-2">
+                                <span>{entry.cdi}</span>
+                                {getTrendIcon(entry.cdi, currentHistory[idx + 1]?.cdi, false)}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {entry.eeg_quality != null ? (
+                              <div className="flex items-center gap-2">
+                                <Badge variant={entry.eeg_quality >= 70 ? "qualityGood" : entry.eeg_quality >= 40 ? "qualityFair" : "qualityPoor"} className="font-semibold">
+                                  {entry.eeg_quality}%
+                                </Badge>
+                              </div>
                             ) : (
                               <span className="text-muted-foreground">—</span>
                             )}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => toggleRowExpansion(entry.result_id)}
-                              className="h-9 w-9 p-0"
-                            >
-                              {<ChevronRight className="h-4 w-4" />}
-                            </Button>
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => toggleRowExpansion(entry.result_id)}
+                                className="h-9 w-9 p-0"
+                                title="View Details"
+                              >
+                                {<ChevronRight className="h-4 w-4" />}
+                              </Button>
+                              {/* <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => navigate(`/longitudinal/${patient_code}`)}
+                                title="View Longitudinal Trends"
+                              >
+                                <TrendingUp className="mr-1 h-4 w-4" />
+                                Trends
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => navigate(`/patient-report/${patient_code}`, { state: { patient: patienData } })}
+                                title="View Patient Report"
+                              >
+                                <Eye className="mr-1 h-4 w-4" />
+                                Report
+                              </Button> */}
+                            </div>
                           </TableCell>
                         </TableRow>
                       );

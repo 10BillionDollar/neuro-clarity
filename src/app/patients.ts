@@ -9,7 +9,7 @@ export async function getPatients() {
 }
 
 export async function getPatientById(patientId: string) {
-  const res = await fetchWithAuth(`${API_BASE_URL}/patients/${patientId}`, {
+  const res = await fetchWithAuth(`${API_BASE_URL}/patient-history/${patientId}`, {
     method: "GET",
   });
   return res.json();
@@ -74,6 +74,17 @@ export async function longitudinal(patientCode: string, payload: Partial<Patient
   });
   return handleResponse(res);
 }
+
+
+
+export async function historypreview(resulted: string, payload: Partial<PatientPayload>) {
+  const res = await fetchWithAuth(`${API_BASE_URL}/report-history/${resulted}`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  });
+  return handleResponse(res);
+}
+
 
 export async function deletePatient(patientCode: string) {
   const res = await fetchWithAuth(`${API_BASE_URL}/delete-patient/${patientCode}`, {

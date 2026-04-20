@@ -79,8 +79,7 @@ const Index = () => {
 
         // Calculate today's screens and high-risk counts
         const todaysCount = patientsWithScreenings.filter(p => {
-          const result = p.risk_band
-          return result;
+          return isToday(p.latestEEGDate);
         }).length;
 
         const highRiskChecks = patientsWithScreenings.filter(p => p.risk_band === "High Cognitive Risk").length;
@@ -122,14 +121,14 @@ const Index = () => {
             variant="danger"
           />
           <StatsCard
-            title="Pending Reviews"
+            title={<span>Pending Reviews<br/><span className="text-xs text-muted-foreground font-normal">(To be launched)</span></span>}
             value={5}
-            subtitle="Awaiting assessment"
+            subtitle="Aw  aiting assessment"
             icon={Clock}
             variant="warning"
           />
           <StatsCard
-            title="Avg EEG Quality"
+            title={<span>Avg EEG Quality<br/><span className="text-xs text-muted-foreground font-normal">(To be launched)</span></span>}
             value="82%"
             subtitle="Signal quality score"
             icon={Zap}

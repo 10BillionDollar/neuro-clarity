@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { signup, SignupPayload } from "./auth";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "./AuthContext";
-
+import {Header} from "@/components/layout/Header";
 export default function Signup() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -43,6 +43,8 @@ export default function Signup() {
   };
 
   return (
+    <>
+    <Header/>
     <div className="flex justify-center items-center h-screen bg-gray-100">
       <form
         onSubmit={handleSubmit}
@@ -119,5 +121,6 @@ export default function Signup() {
         </p>
       </form>
     </div>
+    </> 
   );
 }

@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { historypreview } from "@/app/patients";
 import {
   Collapsible,
   CollapsibleContent,
@@ -172,9 +173,14 @@ const TrendIcon = ({ trend }: { trend: "up" | "down" | "stable" }) => {
 
 const PatientReport = () => {
   const { jobId: jobIdParam } = useParams();
+  const location = useLocation();
   const jobId = jobIdParam ? decodeURIComponent(jobIdParam) : undefined;
   const [graphsExpanded, setGraphsExpanded] = useState(false);
   const [explainabilityExpanded, setExplainabilityExpanded] = useState(false);
+  
+  // Check if navigated from patient history page
+  const fromPatientHistory = location.state?.fromPatientHistory || false;
+  const reportId = location.state?.reportId || jobId;
 
   const [patientData, setPatientData] = useState(initialPatientData);
   const [cognitiveMarkers, setCognitiveMarkers] = useState(initialCognitiveMarkers);
@@ -217,19 +223,32 @@ const PatientReport = () => {
 
   useEffect(() => {
     const loadCardAndGraphData = async () => {
-      if (!jobId) return;
+      if (!reportId) return;
 
       try {
-        const encodedJobId = jobId ? encodeURIComponent(jobId) : "";
-        const cardsRes = await fetchWithAuth(`${API_BASE_URL}/report/${encodedJobId}`);
-        if (cardsRes.ok) {
-          const cardsData = await cardsRes.json();
-          console.log(cardsData, "cardsData");
+        let cardsData;
+        
+        if (fromPatientHistory) {
+          // If navigated from patient history, call historypreview API
+          cardsData = await historypreview(reportId, {});
+          console.log(cardsData, "historypreview data");
+        } else {
+          // Otherwise, call the regular report API
+          const encodedJobId = reportId ? encodeURIComponent(reportId) : "";
+          const cardsRes = await fetchWithAuth(`${API_BASE_URL}/report/${encodedJobId}`);
+          if (cardsRes.ok) {
+            cardsData = await cardsRes.json();
+            console.log(cardsData, "regular report data");
+          }
+        }
 
+        if (cardsData) {
           setCognitiveMarkers(cardsData.cards ?? cardsData);
           setPatientInfo(cardsData);
         }
 
+        // Load graphs data (this can be called regardless of navigation source)
+        const encodedJobId = reportId ? encodeURIComponent(reportId) : "";
         const graphsRes = await fetchWithAuth(`${API_BASE_URL}/graphs/${encodedJobId}`);
         if (graphsRes.ok) {
           const graphDataResponse = await graphsRes.json();
@@ -241,7 +260,12 @@ const PatientReport = () => {
     };
 
     loadCardAndGraphData();
-  }, [jobId]);
+  }, [fromPatientHistory, reportId]);
+
+  // historypreview(jobId).then((data) => {
+  //   console.log(data, "historypreview");
+  // });
+
 
   const handleDownload = async (format: "pdf" | "csv" = "pdf") => {
     if (!jobId) return;
@@ -310,7 +334,7 @@ const PatientReport = () => {
               {patientInfo?.rf_risk?.category?.toUpperCase()} 
             </Badge>
             <p className="mt-2 text-2xl font-bold text-foreground">
-              {patientInfo?.rf_risk?.percentage}%
+              {patientInfo?.rf_risk?.percentage?.toFixed(2)}%
               <span className="ml-1 text-sm font-normal text-muted-foreground">
                 likelihood
               </span>
@@ -329,19 +353,31 @@ const PatientReport = () => {
           <div className="mt-4 grid grid-cols-3 gap-4">
             <div className="rounded-lg bg-card p-4 text-center shadow-sm">
               <p className="text-sm text-muted-foreground">Risk Percentage</p>
-              <p className="text-2xl font-bold text-foreground">{riskPercentage}%</p>
+              <p className={`text-2xl font-bold ${
+                riskPercentage >= 70 ? "text-risk-high" :
+                riskPercentage >= 40 ? "text-risk-moderate" :
+                "text-green-600"
+              }`}>
+                {riskPercentage.toFixed(2)}%
+              </p>
               <p className="text-xs text-muted-foreground">
                 Patient age: {patientInfo?.patient_info?.age}
               </p>
             </div>
             <div className="rounded-lg bg-card p-4 text-center shadow-sm">
               <p className="text-sm text-muted-foreground">Abnormal Markers</p>
-              <p className="text-2xl font-bold text-risk-low">{abnormalMarkerCount}</p>
+              <p className="text-2xl font-bold text-green-600">{abnormalMarkerCount}</p>
               <p className="text-xs text-muted-foreground">out of {markerItems.length}</p>
             </div>
             <div className="rounded-lg bg-card p-4 text-center shadow-sm">
               <p className="text-sm text-muted-foreground">Risk Category</p>
-              <p className="text-2xl font-bold text-risk-high">{riskCategory}</p>
+              <p className={`text-2xl font-bold ${
+                riskCategory?.toLowerCase().includes('low') ? "text-green-600" :
+                riskCategory?.toLowerCase().includes('moderate') ? "text-risk-moderate" :
+                "text-risk-high"
+              }`}>
+                {riskCategory}
+              </p>
               <p className="text-xs text-muted-foreground">Classification</p>
             </div>
           </div>

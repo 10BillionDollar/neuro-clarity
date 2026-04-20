@@ -37,6 +37,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect, type ReactNode } from "react";
 import { getPatientHistory } from "@/app/patients";
+import { getRiskBadgeVariant, getRiskTextColorClass, getRiskBadgeVariantFromPercentage, getRiskLevelFromPercentage } from "@/lib/riskUtils";
 
 interface Patient {
   patient_code: string;
@@ -59,16 +60,6 @@ interface ReportTableProps {
   onAddPatient?: () => void;
   loading?: boolean;
 }
-
-
-const getRiskBadgeVariant = (level: any) => {
-  if (!level) return "secondary";
-  const l = String(level).toLowerCase();
-  if (l.includes("high")) return "riskHigh";
-  if (l.includes("moderate")) return "riskModerate";
-  if (l.includes("low")) return "riskLow";
-  return "secondary";
-};
 
 
 const getQualityBadgeVariant = (quality: any) => {
@@ -361,24 +352,24 @@ export function ReportTable({ patients, selectedPatientId, onEditPatient, onDele
                     </TableCell>
                     <TableCell>
                       {patient.risk_percent != null ? (
-                        <Badge variant={getQualityBadgeVariant(patient.risk_percent)}>
-                          {patient.risk_percent.toFixed(0)}%
+                        <Badge variant={getRiskBadgeVariantFromPercentage(patient.risk_percent)} className="font-semibold">
+                          {patient.risk_percent.toFixed(2)}%
                         </Badge>
                       ) : (
                         <span className="text-muted-foreground">N/A</span>
                       )}
                     </TableCell>
                     <TableCell>
-                      {patient.risk_band ? (
+                      {patient.risk_percent != null ? (
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Badge variant={getRiskBadgeVariant(patient.risk_band)} className="max-w-[120px] truncate inline-block">
-                                {patient.risk_band}
+                              <Badge variant={getRiskBadgeVariantFromPercentage(patient.risk_percent)} className="max-w-[120px] truncate inline-block">
+                                {getRiskLevelFromPercentage(patient.risk_percent).charAt(0).toUpperCase() + getRiskLevelFromPercentage(patient.risk_percent).slice(1)} Risk
                               </Badge>
                             </TooltipTrigger>
                             <TooltipContent className="max-w-xs break-words">
-                              {patient.risk_band}
+                              {getRiskLevelFromPercentage(patient.risk_percent).charAt(0).toUpperCase() + getRiskLevelFromPercentage(patient.risk_percent).slice(1)} Risk ({patient.risk_percent.toFixed(2)}%)
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
@@ -386,19 +377,6 @@ export function ReportTable({ patients, selectedPatientId, onEditPatient, onDele
                         <span className="text-muted-foreground">N/A</span>
                       )}
                     </TableCell>
-                    {/* <TableCell>
-                      {patient.latestProbability !== undefined ? (
-                        <span className={`font-semibold ${
-                          patient.latestProbability >= 70 ? "text-risk-high" :
-                          patient.latestProbability >= 40 ? "text-risk-moderate" :
-                          "text-risk-low"
-                        }`}>
-                          {patient.latestProbability}%
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell> */}
                     <TableCell className="text-muted-foreground">
                       {patient.latestEEGDate ? new Date(patient.latestEEGDate).toLocaleDateString() : "No screening"}
                     </TableCell>
@@ -435,14 +413,15 @@ export function ReportTable({ patients, selectedPatientId, onEditPatient, onDele
                           <Eye className="mr-1 h-4 w-4" />
                           View
                         </Button>
-                        {/* <Button 
+                        <Button 
                           variant="ghost" 
                           size="sm"
                           onClick={() => navigate(`/longitudinal/${patient.patient_code}`)}
+                          title="View Longitudinal Trends"
                         >
                           <TrendingUp className="mr-1 h-4 w-4" />
                           Trends
-                        </Button> */}
+                        </Button>
                       </div>  
                       
                     </TableCell>

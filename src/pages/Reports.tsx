@@ -20,7 +20,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Search, Filter, Eye, Download, TrendingUp, Loader2 } from "lucide-react";
-
+import { historypreview } from "@/app/patients";
+import { getReport } from "@/app/reports";
 interface Report {
   id: string;
   patientId: string;
@@ -62,7 +63,9 @@ const Reports = () => {
       }
     };
 
+
     loadReports();
+    
   }, []);
 
   const filteredReports = reports.filter((report) => {
@@ -161,9 +164,9 @@ const Reports = () => {
                       <span className={`font-semibold ${
                         report.probability >= 70 ? "text-risk-high" :
                         report.probability >= 40 ? "text-risk-moderate" :
-                        "text-risk-low"
+                        "text-green-600"
                       }`}>
-                        {report.probability}%
+                        {report.probability.toFixed(2)}%
                       </span>
                     </TableCell>
                     <TableCell>
