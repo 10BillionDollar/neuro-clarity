@@ -398,7 +398,7 @@ const PatientReport = () => {
                     <h3 className="font-semibold text-foreground">{marker.label}</h3>
                     <p className="text-xs text-muted-foreground">{marker.description}</p>
                   </div>
-                  <TrendIcon trend={marker.status === 'high' ? 'up' : marker.status === 'low' ? 'down' : 'stable'} />
+                  {/* <TrendIcon trend={marker.status === 'high' ? 'up' : marker.status === 'low' ? 'down' : 'stable'} /> */}
                 </div>
                 
                 <div className="mt-3 flex items-baseline gap-2">

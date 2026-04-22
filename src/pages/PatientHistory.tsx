@@ -467,7 +467,7 @@ const getRiskBadgeVariant = (level: any) => {
                                 <Badge variant={getRiskBadgeVariantFromPercentage(entry.risk_percent)} className="font-semibold">
                                   {entry.risk_percent.toFixed(1)}%
                                 </Badge>
-                                {getTrendIcon(entry.risk_percent, currentHistory[idx + 1]?.risk_percent)}
+                                {/* {getTrendIcon(entry.risk_percent, currentHistory[idx + 1]?.risk_percent)} */}
                               </div>
                             ) : (
                               <span className="text-muted-foreground">—</span>
@@ -484,30 +484,30 @@ const getRiskBadgeVariant = (level: any) => {
                             )}
                           </TableCell> */}
                           <TableCell>
-                            {entry.pdr != null ? (
+                            {entry.pcr != null ? (
                               <div className="flex items-center gap-2">
-                                <span>{entry.pdr} Hz</span>
-                                {getTrendIcon(entry.pdr, currentHistory[idx + 1]?.pdr, true)}
+                                <span>{entry.pcr} Hz</span>
+                                {/* {getTrendIcon(entry.pcr, currentHistory[idx + 1]?.pcr, true)} */}
                               </div>
                             ) : (
                               <span className="text-muted-foreground">—</span>
                             )}
                           </TableCell>
                           <TableCell>
-                            {entry.cdi != null ? (
+                            {entry.cli != null ? (
                               <div className="flex items-center gap-2">
-                                <span>{entry.cdi}</span>
-                                {getTrendIcon(entry.cdi, currentHistory[idx + 1]?.cdi, false)}
+                                <span>{parseInt(entry.cli)}</span>
+                                {/* {getTrendIcon(entry.cli, currentHistory[idx + 1]?.cli, false)} */}
                               </div>
                             ) : (
                               <span className="text-muted-foreground">—</span>
                             )}
                           </TableCell>
                           <TableCell>
-                            {entry.eeg_quality != null ? (
+                            {entry.quality_score != null ? (
                               <div className="flex items-center gap-2">
-                                <Badge variant={entry.eeg_quality >= 70 ? "qualityGood" : entry.eeg_quality >= 40 ? "qualityFair" : "qualityPoor"} className="font-semibold">
-                                  {entry.eeg_quality}%
+                                <Badge variant={entry.quality_score >= 70 ? "qualityGood" : entry.quality_score >= 40 ? "qualityFair" : "qualityPoor"} className="font-semibold">
+                                  {entry.quality_score}%
                                 </Badge>
                               </div>
                             ) : (
