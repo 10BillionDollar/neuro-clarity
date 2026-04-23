@@ -3,6 +3,7 @@ import { useParams, useLocation } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PageLoader } from "@/components/ui/loader";
 import { historypreview } from "@/app/patients";
 import {
   Collapsible,
@@ -41,17 +42,16 @@ import {
 
 // Mock patient data
 const initialPatientData = {
-  id: "P001",
-  name: "Rajesh Kumar",
-  age: 68,
-  sex: "M",
-  screeningDate: "2024-01-15",
-  riskLevel: "high" as const,
-  probability: 78,
-  brainAge: 76,
-  signalQuality: 88,
-  interpretation:
-    "Moderate-to-high concern. Multiple markers suggest cognitive decline patterns consistent with early dementia. Recommend neuro referral if symptoms persist.",
+  id: "",
+  name: "",
+  age: 0,
+  sex: "",
+  screeningDate: "",
+  riskLevel: "low" as const,
+  probability: 0,
+  brainAge: 0,
+  signalQuality: 0,
+  interpretation: "",
 };
 
 const initialCognitiveMarkers = [
@@ -189,26 +189,27 @@ const PatientReport = () => {
   const [graphData, setGraphData] = useState(null);
   const [downloadLoading, setDownloadLoading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [patientInfo, setPatientInfo] = useState<any>({
     patient_info: {
-      name: "Rajesh Kumar",
-      age: 68,
-      gender: "Male",
-      id: "P001",
+      name: "",
+      age: 0,
+      gender: "",
+      id: "",
       mmse_score: "",
       moca_score: "",
       notes: "",
     },
     decline_summary: {
-      band: "Moderate-to-high concern",
-      percent: 78,
+      band: "",
+      percent: 0,
     },
     rf_risk: {
-      category: "High",
-      percentage: 78,
-      probability: 0.78,
-      model: "Demo",
+      category: "",
+      percentage: 0,
+      probability: 0,
+      model: "",
     },
   });
 
@@ -245,6 +246,7 @@ const PatientReport = () => {
         if (cardsData) {
           setCognitiveMarkers(cardsData.cards ?? cardsData);
           setPatientInfo(cardsData);
+          setIsLoading(false);
         }
 
         // Load graphs data (this can be called regardless of navigation source)
@@ -305,6 +307,15 @@ const PatientReport = () => {
 
   const riskPercentage = patientInfo?.rf_risk?.percentage ?? patientInfo?.decline_summary?.percent ?? "N/A";
   const riskCategory = patientInfo?.rf_risk?.category ?? "N/A";
+
+  // Show loader if no patient data is available
+  if (!patientInfo?.patient_info?.name && !patientInfo?.patient_info?.id) {
+    return (
+      <MainLayout>
+        <PageLoader text="Loading patient report..." />
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
@@ -390,7 +401,12 @@ const PatientReport = () => {
             {markerItems.map((marker, index) => (
               <div
                 key={marker.id}
-                className="rounded-lg border border-border bg-muted/20 p-4 transition-all hover:bg-muted/40 animate-fade-in"
+                className={cn(
+                  "rounded-lg border border-border p-4 transition-all hover:bg-muted/40 animate-fade-in",
+                  marker.status === "normal" ? "bg-green-50 border-green-200" : 
+                  marker.status === "abnormal" ? "bg-red-50 border-red-200" : 
+                  "bg-muted/20"
+                )}
                 style={{ animationDelay: `${index * 50}ms` }}
               >
                 <div className="flex items-start justify-between">
@@ -404,7 +420,7 @@ const PatientReport = () => {
                 <div className="mt-3 flex items-baseline gap-2">
                   <span className="text-xl font-bold text-foreground">{marker.value}</span>
                   <span className="text-xs text-muted-foreground">
-                    Normal: {marker.normal_range}
+                   <span className="capitalize"> {marker?.status}</span> : {marker.normal_range}
                   </span>
                 </div>
                 

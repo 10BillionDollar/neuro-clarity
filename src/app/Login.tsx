@@ -57,7 +57,7 @@ export default function Login() {
     >
       <form onSubmit={handleSubmit} className="space-y-6">
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
+          <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-md">
             {error}
           </div>
         )}
@@ -95,7 +95,7 @@ export default function Login() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
               >
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
@@ -115,7 +115,7 @@ export default function Login() {
             checked={rememberMe}
             onCheckedChange={(checked) => setRememberMe(checked as boolean)}
           />
-          <Label htmlFor="remember" className="text-sm text-gray-700">
+          <Label htmlFor="remember" className="text-sm text-muted-foreground">
             Remember Me
           </Label>
         </div>
@@ -138,12 +138,12 @@ export default function Login() {
 
         {/* Sign Up Link */}
         <div className="text-center">
-          <span className="text-sm text-gray-600">
+          <span className="text-sm text-muted-foreground">
             Don't have an account?{" "}
             <button
               type="button"
               onClick={() => navigate("/signup")}
-              className="text-blue-600 hover:text-blue-500 font-medium"
+              className="text-primary hover:text-primary/80 font-medium transition-colors"
             >
               Sign Up
             </button>
