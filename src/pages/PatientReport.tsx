@@ -309,7 +309,7 @@ const PatientReport = () => {
   const riskCategory = patientInfo?.rf_risk?.category ?? "N/A";
 
   // Show loader if no patient data is available
-  if (!patientInfo?.patient_info?.name && !patientInfo?.patient_info?.id) {
+  if (!patientInfo) {
     return (
       <MainLayout>
         <PageLoader text="Loading patient report..." />
@@ -449,7 +449,7 @@ const PatientReport = () => {
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 {/* Bandpowers Chart */}
                 <div className="rounded-lg border border-border p-4">
-                  <h3 className="mb-4 font-semibold text-foreground">EEG Band Powers</h3>
+                  <h3 className="mb-4 font-semibold text-foreground">EEG Band Powers (µV²/Hz)</h3>
                   <ResponsiveContainer width="100%" height={200}>
                     <BarChart data={Object.entries(graphData?.bandpowers || {}).map(([key, value]) => ({ name: key, value }))}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -493,15 +493,15 @@ const PatientReport = () => {
                 <h3 className="mb-4 font-semibold text-foreground">Signal Variance Analysis</h3>
                 <div className="grid grid-cols-3 gap-4">
                   <div className="text-center">
-                    <p className="text-sm text-muted-foreground">Signal Variance</p>
+                    <p className="text-sm text-muted-foreground"> Signal Variance (µV²)</p>
                     <p className="text-xl font-bold">{graphData?.variance?.signal_variance?.toFixed(4)}</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-sm text-muted-foreground">Normal Mean Variance</p>
+                    <p className="text-sm text-muted-foreground">Normal Mean Variance (µV²) </p>
                     <p className="text-xl font-bold">{graphData?.variance?.normal_mean_variance?.toFixed(4)}</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-sm text-muted-foreground">Variance Z-Score</p>
+                    <p className="text-sm text-muted-foreground">VarianceZ score</p>
                     <p className="text-xl font-bold">{graphData?.variance?.variance_zscore?.toFixed(3)}</p>
                   </div>
                 </div>

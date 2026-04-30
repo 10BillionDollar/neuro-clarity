@@ -30,7 +30,8 @@ import {
 } from "@/components/ui/tooltip";
 import { getPatientById, getPatientHistory } from "@/app/patients";
 import { getRiskBadgeVariantFromPercentage, getRiskLevelFromPercentage, getRiskLevelText } from "@/lib/riskUtils";
-import { ArrowLeft, Clock, ChevronDown, ChevronRight, TrendingUp, Activity, Brain, Eye, TrendingDown, Minus } from "lucide-react";
+import { API_BASE_URL } from "@/app/config";
+import { ArrowLeft, Clock, ChevronDown, ChevronRight, TrendingUp, Activity, Brain, Eye, TrendingDown, Minus, Download, FileText } from "lucide-react";
 
 interface HistoryEntry {
   id?: number | string;
@@ -42,6 +43,8 @@ interface HistoryEntry {
   eeg_quality?: number;
   diagnosis?: string;
   notes?: string;
+  prescription_path?: string;
+  prescription_url?: string;
   [key: string]: any;
 }
 
@@ -129,6 +132,54 @@ export default function PatientHistory() {
 const toggleRowExpansion = (rowId: string | number) => {
   //  console.log(rowId,"rowId")
   navigate(`/report/${rowId}`, { state: { patientCode: patient_code, reportId: rowId, fromPatientHistory: true } });
+  };
+
+  const handlePrescriptionDownload = async (entry: HistoryEntry) => {
+    const prescriptionUrl = entry.prescription_url || entry.prescription_path || entry.prescription || entry.prescription_file;
+    if (!prescriptionUrl) {
+      console.error('No prescription URL available');
+      return;
+    }
+
+    try {
+      // If it's a relative path, construct full URL
+      const fullUrl = prescriptionUrl.startsWith('http') 
+        ? prescriptionUrl 
+        : `${API_BASE_URL}/${prescriptionUrl.replace(/^\//, '')}`;
+      
+      const response = await fetch(fullUrl);
+      if (!response.ok) {
+        throw new Error('Failed to download prescription');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `prescription_${entry.patient_code}_${entry.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading prescription:', error);
+    }
+  };
+
+  const handlePrescriptionView = (entry: HistoryEntry) => {
+    const prescriptionUrl = entry.prescription_url || entry.prescription_path || entry.prescription || entry.prescription_file;
+    if (!prescriptionUrl) {
+      console.error('No prescription URL available');
+      return;
+    }
+
+    // If it's a relative path, construct full URL
+    const fullUrl = prescriptionUrl.startsWith('http') 
+      ? prescriptionUrl 
+      : `${API_BASE_URL}/${prescriptionUrl.replace(/^\//, '')}`;
+    
+    // Open in new tab
+    window.open(fullUrl, '_blank');
   };
 
   // console.log(,"navigate")
@@ -438,6 +489,7 @@ const getRiskBadgeVariant = (level: any) => {
                       <TableHead className="font-semibold">PDR (Hz)</TableHead>
                       <TableHead className="font-semibold">CDI</TableHead>
                       <TableHead className="font-semibold">Quality</TableHead>
+                      <TableHead className="font-semibold">Prescription</TableHead>
                       <TableHead className="font-semibold text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -514,8 +566,44 @@ const getRiskBadgeVariant = (level: any) => {
                               <span className="text-muted-foreground">—</span>
                             )}
                           </TableCell>
+                          <TableCell>
+                          {/* {JSON.stringfy(v)} */}
+                            {/* {entry.prescription_path} */}
+                            {(entry.prescription_path || entry.prescription_url || entry.prescription || entry.prescription_file) ? (
+                              <div className="flex items-center gap-2">
+                                <Badge variant="secondary" className="text-xs">
+                                  <FileText className="h-3 w-3 mr-1" />
+                                  {/* Available */}
+                                </Badge>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">None</span>
+                            )}
+                          </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
+                              {(entry.prescription_path || entry.prescription_url || entry.prescription || entry.prescription_file) && (
+                                <>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handlePrescriptionView(entry)}
+                                    className="h-9 w-9 p-0"
+                                    title="View Prescription"
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handlePrescriptionDownload(entry)}
+                                    className="h-9 w-9 p-0"
+                                    title="Download Prescription"
+                                  >
+                                    <Download className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              )}
                               <Button
                                 variant="outline"
                                 size="sm"

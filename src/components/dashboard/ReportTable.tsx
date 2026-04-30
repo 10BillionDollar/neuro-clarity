@@ -1,4 +1,4 @@
-import { Eye, TrendingUp, Pencil, Trash2, Plus, History } from "lucide-react";
+import { Eye, TrendingUp, Pencil, Trash2, Plus, History, Download, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DateRangePicker, type DateRange } from "@/components/ui/date-range-picker";
@@ -38,6 +38,7 @@ import { useNavigate } from "react-router-dom";
 import { useState, useEffect, type ReactNode } from "react";
 import { getPatientHistory } from "@/app/patients";
 import { getRiskBadgeVariant, getRiskTextColorClass, getRiskBadgeVariantFromPercentage, getRiskLevelFromPercentage } from "@/lib/riskUtils";
+import { API_BASE_URL } from "@/app/config";
 
 interface Patient {
   patient_code: string;
@@ -50,6 +51,8 @@ interface Patient {
   latestProbability?: number;
   risk_band?: string;
   risk_percent?: number;
+  prescription_path?: string;
+  prescription_url?: string;
 }
 
 interface ReportTableProps {
@@ -228,6 +231,53 @@ export function ReportTable({ patients, selectedPatientId, onEditPatient, onDele
 
   // merge paitent and patient history data to show in the table, with patient data taking precedence
 
+  const handlePrescriptionDownload = async (patient: Patient) => {
+    const prescriptionUrl = patient.prescription_url || patient.prescription_path;
+    if (!prescriptionUrl) {
+      console.error('No prescription URL available');
+      return;
+    }
+
+    try {
+      // If it's a relative path, construct full URL
+      const fullUrl = prescriptionUrl.startsWith('http') 
+        ? prescriptionUrl 
+        : `${API_BASE_URL}/${prescriptionUrl.replace(/^\//, '')}`;
+      
+      const response = await fetch(fullUrl);
+      if (!response.ok) {
+        throw new Error('Failed to download prescription');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `prescription_${patient.patient_code}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading prescription:', error);
+    }
+  };
+
+  const handlePrescriptionView = (patient: Patient) => {
+    const prescriptionUrl = patient.prescription_url || patient.prescription_path;
+    if (!prescriptionUrl) {
+      console.error('No prescription URL available');
+      return;
+    }
+
+    // If it's a relative path, construct full URL
+    const fullUrl = prescriptionUrl.startsWith('http') 
+      ? prescriptionUrl 
+      : `${API_BASE_URL}/${prescriptionUrl.replace(/^\//, '')}`;
+    
+    // Open in new tab
+    window.open(fullUrl, '_blank');
+  };
 
   return (
     <div className="clinical-card overflow-hidden p-0 relative">
@@ -284,6 +334,7 @@ export function ReportTable({ patients, selectedPatientId, onEditPatient, onDele
                   <TableHead className="font-semibold">Risk Level</TableHead>
                   {/* <TableHead className="font-semibold">Probability</TableHead> */}
                   <TableHead className="font-semibold">Last Screening</TableHead>
+                  {/* <TableHead className="font-semibold">Prescription</TableHead> */}
                   <TableHead className="font-semibold text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -309,6 +360,9 @@ export function ReportTable({ patients, selectedPatientId, onEditPatient, onDele
                       <TableCell>
                         <Skeleton className="h-4 w-28" />
                       </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-6 w-16" />
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Skeleton className="h-8 w-20" />
@@ -319,7 +373,7 @@ export function ReportTable({ patients, selectedPatientId, onEditPatient, onDele
                   ))
                 ) : currentPatients.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       No matching patients found.
                     </TableCell>
                   </TableRow>
@@ -380,9 +434,30 @@ export function ReportTable({ patients, selectedPatientId, onEditPatient, onDele
                     <TableCell className="text-muted-foreground">
                       {patient.latestEEGDate ? new Date(patient.latestEEGDate).toLocaleDateString() : "No screening"}
                     </TableCell>
-                    <TableCell className="text-right">
+                                       <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        
+                        {(patient.prescription_path || patient.prescription_url) && (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handlePrescriptionView(patient)}
+                              className="h-9 w-9 p-0"
+                              title="View Prescription"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handlePrescriptionDownload(patient)}
+                              className="h-9 w-9 p-0"
+                              title="Download Prescription"
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
                         {onEditPatient && (
                           <Button 
                             variant="ghost" 

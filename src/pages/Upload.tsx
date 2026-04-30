@@ -62,7 +62,9 @@ const Upload = () => {
   const [selectedPatientCode, setSelectedPatientCode] = useState<string>("");
   const [patientSearch, setPatientSearch] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [prescriptionFile, setPrescriptionFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isDraggingPrescription, setIsDraggingPrescription] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [qualityResult, setQualityResult] = useState<QualityResult | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -221,6 +223,28 @@ const Upload = () => {
     }
   };
 
+  const handlePrescriptionDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDraggingPrescription(false);
+    const droppedFile = e.dataTransfer.files[0];
+    if (droppedFile && (droppedFile.name.endsWith('.pdf') || droppedFile.name.endsWith('.jpg') || droppedFile.name.endsWith('.jpeg') || droppedFile.name.endsWith('.png'))) {
+      setPrescriptionFile(droppedFile);
+    } else {
+      toast({
+        title: "Invalid file format",
+        description: "Please upload a PDF or image file (JPG, PNG)",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handlePrescriptionFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      setPrescriptionFile(selectedFile);
+    }
+  };
+
   const handleUploadAndContinue = async () => {
     if (!file) return;
 
@@ -229,6 +253,9 @@ const Upload = () => {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('patient_code', selectedPatientCode);
+      if (prescriptionFile) {
+        formData.append('prescription', prescriptionFile);
+      }
 
       const response = await fetchWithAuth(`${API_BASE_URL}/upload`, {
         method: 'POST',
@@ -623,7 +650,58 @@ const Upload = () => {
                       </div>
                     )}
                   </div>
+ <div className="mt-6 pt-6 border-t border-border">
+                    <div className="text-center mb-4">
+                      <h3 className="text-lg font-semibold text-foreground">Upload Prescription (Optional)</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">Supported formats: PDF, JPG, PNG</p>
+                    </div>
 
+                    <div
+                      className={cn(
+                        "upload-zone",
+                        isDraggingPrescription && "upload-zone-active",
+                        prescriptionFile && "border-risk-low bg-risk-low-bg"
+                      )}
+                      onDragOver={(e) => { e.preventDefault(); setIsDraggingPrescription(true); }}
+                      onDragLeave={() => setIsDraggingPrescription(false)}
+                      onDrop={handlePrescriptionDrop}
+                    >
+                      {prescriptionFile ? (
+                        <div className="flex flex-col items-center gap-3">
+                          <FileText className="h-12 w-12 text-risk-low" />
+                          <div>
+                            <p className="font-medium text-foreground">{prescriptionFile.name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {(prescriptionFile.size / 1024 / 1024).toFixed(2)} MB
+                            </p>
+                          </div>
+                          <Button variant="outline" size="sm" onClick={() => setPrescriptionFile(null)}>
+                            Remove
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-3">
+                          <UploadIcon className="h-12 w-12 text-muted-foreground" />
+                          <div>
+                            <p className="font-medium text-foreground">Drag and drop your prescription file here</p>
+                            <p className="text-sm text-muted-foreground">or click to browse</p>
+                          </div>
+                          <input
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            className="hidden"
+                            id="prescription-upload"
+                            onChange={handlePrescriptionFileSelect}
+                          />
+                          <label htmlFor="prescription-upload">
+                            <Button variant="outline" asChild>
+                              <span>Browse Files</span>
+                            </Button>
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                   <div className="flex justify-between">
                     <Button variant="outline" onClick={() => setCurrentStep(1)}>
                       Back
@@ -641,6 +719,9 @@ const Upload = () => {
                       )}
                     </Button>
                   </div>
+
+                  {/* Prescription Upload Section */}
+                 
                 </>
               )}
             </div>
@@ -667,14 +748,14 @@ const Upload = () => {
                           <p className="text-sm text-green-800">EEG analysis is complete and results are ready.</p>
                         </div>
                       </div>
-                      <div className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-foreground shadow-sm">
+                      {/* <div className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-foreground shadow-sm">
                         <span>Patient: </span>
                         <span className="text-primary">{patientInfo.name || patientInfo.id}</span>
-                      </div>
+                      </div> */}
                     </div>
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-3">
+                  <div className="grid gap-4 md:grid-cols-2">
                     <div className="rounded-2xl border border-border bg-card p-5">
                       <p className="text-sm font-medium text-muted-foreground">Overall Quality</p>
                       <p className="mt-3 text-4xl font-bold text-foreground">{qualityResult.overallScore}%</p>
@@ -694,14 +775,14 @@ const Upload = () => {
                       </p>
                     </div>
 
-                    <div className="rounded-2xl border border-border bg-card p-5">
+                    {/* <div className="rounded-2xl border border-border bg-card p-5">
                       <p className="text-sm font-medium text-muted-foreground">Bad Channels</p>
                       <p className="mt-3 text-3xl font-semibold text-foreground">{qualityResult.badChannels?.length || 0}</p>
                       <p className="mt-2 text-sm text-muted-foreground">Channels flagged for review</p>
-                    </div>
+                    </div> */}
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
+                  {/* <div className="grid gap-4 md:grid-cols-2">
                     <div className="rounded-2xl border border-border bg-card p-5">
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-sm font-medium text-muted-foreground">Muscle Artifacts</p>
@@ -721,7 +802,7 @@ const Upload = () => {
                       </div>
                       <p className="mt-3 text-sm text-muted-foreground">Eye blink activity present in the EEG.</p>
                     </div>
-                  </div>
+                  </div> */}
 
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <Button variant="outline" onClick={() => setCurrentStep(2)}>

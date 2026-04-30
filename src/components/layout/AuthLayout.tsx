@@ -26,8 +26,8 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
               <div className="absolute bottom-8 left-8 w-3 h-3 bg-primary/60 rounded-full"></div>
               <div className="absolute bottom-8 right-8 w-3 h-3 bg-primary/60 rounded-full"></div>
               {/* People icons */}
-              <Users className="absolute -top-4 -left-4 w-8 h-8 text-primary" />
-              <Users className="absolute -bottom-4 -right-4 w-8 h-8 text-primary" />
+              {/* <Users className="absolute -top-4 -left-4 w-8 h-8 text-primary" />
+              <Users className="absolute -bottom-4 -right-4 w-8 h-8 text-primary" /> */}
             </div>
           </div>
 
@@ -47,7 +47,7 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
               Neuro Electrical Mind for All
             </h1>
             <p className="text-muted-foreground text-sm leading-relaxed">
-            NEMA AI transforms EEG brain signals into clear, actionable clinical insights for early detection, monitoring, and smarter brain health decisions.
+NEMA AI turns EEG signals into actionable insights for early detection and better brain health decisions.
             </p>
           </div>
         </div>

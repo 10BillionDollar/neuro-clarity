@@ -38,7 +38,14 @@ export default function Login() {
       try {
         const res = await login(payload);
         if (res.access_token) {
-          authLogin(res.access_token);
+          // Pass user data from login API response to AuthContext
+          const userData = {
+            email: res.email,
+            name: res.name,
+            hospital_name: res.hospital_name,
+            ...res.user // Include any additional user data
+          };
+          authLogin(res.access_token, userData);
           navigate("/");
         } else {
           setError(res.detail || "Login failed");
