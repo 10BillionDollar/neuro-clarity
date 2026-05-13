@@ -38,7 +38,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const decoded = parseJwt<JwtPayload>(token);
       console.log(decoded,"decorde")
       if (decoded) {
-        setUser({ name: decoded.name, email: decoded.email, ...decoded });
+        const userInfo = { name: decoded.name, email: decoded.email, ...decoded };
+        // Restore hospital_name from sessionStorage if not in token
+        const hospitalName = sessionStorage.getItem('hospital_name');
+        if (hospitalName && !userInfo.hospital_name) {
+          userInfo.hospital_name = hospitalName;
+        }
+        setUser(userInfo);
       }
       setIsAuthenticated(true);
     }
@@ -50,10 +56,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Otherwise, decode from JWT token
     if (userData) {
       setUser(userData);
+      // Store hospital_name in sessionStorage for persistence
+      if (userData.hospital_name) {
+        sessionStorage.setItem('hospital_name', userData.hospital_name);
+      }
     } else {
       const decoded = parseJwt<JwtPayload>(token);
       if (decoded) {
-        setUser({ name: decoded.name, email: decoded.email, ...decoded });
+        const userInfo = { name: decoded.name, email: decoded.email, ...decoded };
+        setUser(userInfo);
+        // Store hospital_name in sessionStorage for persistence
+        if (userInfo.hospital_name) {
+          sessionStorage.setItem('hospital_name', userInfo.hospital_name);
+        }
       }
     }
     setIsAuthenticated(true);
@@ -61,6 +76,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem('token');
+    sessionStorage.removeItem('hospital_name');
     setUser(null);
     setIsAuthenticated(false);
   };

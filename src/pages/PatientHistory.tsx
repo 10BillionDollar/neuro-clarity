@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useParams, useNavigate,useLocation } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { useAuth } from "@/app/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DateRangePicker, type DateRange } from "@/components/ui/date-range-picker";
@@ -28,10 +29,18 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { getPatientById, getPatientHistory } from "@/app/patients";
 import { getRiskBadgeVariantFromPercentage, getRiskLevelFromPercentage, getRiskLevelText } from "@/lib/riskUtils";
 import { API_BASE_URL } from "@/app/config";
-import { ArrowLeft, Clock, ChevronDown, ChevronRight, TrendingUp, Activity, Brain, Eye, TrendingDown, Minus, Download, FileText } from "lucide-react";
+import { downloadPrescription, getPrescriptionData, getFileExtension } from "@/app/reports";
+import { ArrowLeft, Clock, ChevronDown, ChevronRight, TrendingUp, Activity, Brain, Eye, TrendingDown, Minus, Download, FileText, Loader2 } from "lucide-react";
 
 interface HistoryEntry {
   id?: number | string;
@@ -51,6 +60,7 @@ interface HistoryEntry {
 export default function PatientHistory() {
   const { patient_code } = useParams<{ patient_code: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [patientName, setPatientName] = useState("");
   const [loading, setLoading] = useState(true);
@@ -62,6 +72,12 @@ export default function PatientHistory() {
   const pageSize = 8;
   const location = useLocation();
   const patienData = location.state?.patient;
+  
+  // Modal state for prescription view
+  const [prescriptionModalOpen, setPrescriptionModalOpen] = useState(false);
+  const [currentPrescription, setCurrentPrescription] = useState<{ url: string; blob: Blob; fileName: string; textContent?: string } | null>(null);
+  const [prescriptionLoading, setPrescriptionLoading] = useState(false);
+  const [downloadingPrescriptionId, setDownloadingPrescriptionId] = useState<string | number | null>(null);
   const parseDate = (dateStr: string | undefined): Date | null => {
     if (!dateStr) return null;
     try {
@@ -134,52 +150,146 @@ const toggleRowExpansion = (rowId: string | number) => {
   navigate(`/report/${rowId}`, { state: { patientCode: patient_code, reportId: rowId, fromPatientHistory: true } });
   };
 
-  const handlePrescriptionDownload = async (entry: HistoryEntry) => {
-    const prescriptionUrl = entry.prescription_url || entry.prescription_path || entry.prescription || entry.prescription_file;
-    if (!prescriptionUrl) {
-      console.error('No prescription URL available');
+const handleDownload = async (entry: HistoryEntry) => {
+  // Use the result ID for the API call
+  const resultId = entry.result_id;
+  
+  if (!resultId) {
+    alert('No result ID available for download');
+    return;
+  }
+
+  // Set loading state for this specific prescription
+  setDownloadingPrescriptionId(resultId);
+
+  try {
+    // Use the new API endpoint for prescription download
+    const { url, blob } = await downloadPrescription(resultId);
+    
+    // Detect file type from MIME type
+    const getFileExtension = (mimeType: string): string => {
+      const mimeTypes: { [key: string]: string } = {
+        'application/pdf': 'pdf',
+        'image/jpeg': 'jpg',
+        'image/jpg': 'jpg',
+        'image/png': 'png',
+        'text/plain': 'txt',
+        'text/html': 'html',
+        'application/msword': 'doc',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+        'image/tiff': 'tiff',
+        'image/bmp': 'bmp',
+        'image/gif': 'gif'
+      };
+      return mimeTypes[mimeType] || 'pdf'; // default to pdf if unknown
+    };
+    
+    const fileExtension = getFileExtension(blob.type);
+    const fileName = `prescription_${resultId}.${fileExtension}`;
+    
+    // Create download link
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = fileName;
+    
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    
+    console.log(`Prescription downloaded successfully: ${fileName} (${blob.type})`);
+  } catch (error) {
+    console.error('Error downloading prescription:', error);
+    alert('Failed to download prescription: ' + (error as Error).message);
+  } finally {
+    // Clear loading state
+    setDownloadingPrescriptionId(null);
+  }
+};
+
+  const handlePrescriptionView = async (entry: HistoryEntry) => {
+    // Check if prescription has direct URL available
+    if (entry.prescription_url) {
+      // Open directly in new tab without API call
+      window.open(entry.prescription_url, '_blank');
+      return;
+    }
+    
+    // If no direct URL, check if prescription path exists
+    if (entry.prescription_path) {
+      // Construct full URL from prescription path
+      const fullUrl = `${API_BASE_URL}/${entry.prescription_path}`;
+      window.open(fullUrl, '_blank');
+      return;
+    }
+    
+    // Fallback to API call if no direct URL available
+    const resultId = entry.result_id;
+    
+    if (!resultId) {
+      alert('No result ID available for viewing');
       return;
     }
 
+    setPrescriptionLoading(true);
+    setPrescriptionModalOpen(true);
+
     try {
-      // If it's a relative path, construct full URL
-      const fullUrl = prescriptionUrl.startsWith('http') 
-        ? prescriptionUrl 
-        : `${API_BASE_URL}/${prescriptionUrl.replace(/^\//, '')}`;
+      // Use the new API endpoint for prescription download
+      const { url, blob } = await downloadPrescription(resultId);
       
-      const response = await fetch(fullUrl);
-      if (!response.ok) {
-        throw new Error('Failed to download prescription');
+      // Detect file type from MIME type
+      const getFileExtension = (mimeType: string): string => {
+        const mimeTypes: { [key: string]: string } = {
+          'application/pdf': 'pdf',
+          'image/jpeg': 'jpg',
+          'image/jpg': 'jpg',
+          'image/png': 'png',
+          'text/plain': 'txt',
+          'text/html': 'html',
+          'application/msword': 'doc',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+          'image/tiff': 'tiff',
+          'image/bmp': 'bmp',
+          'image/gif': 'gif'
+        };
+        return mimeTypes[mimeType] || 'pdf';
+      };
+      
+      const fileExtension = getFileExtension(blob.type);
+      const fileName = `prescription_${resultId}.${fileExtension}`;
+      
+      // Get text content for text files
+      let textContent;
+      if (blob.type.startsWith('text/')) {
+        textContent = await blob.text();
       }
       
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `prescription_${entry.patient_code}_${entry.id}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
+      setCurrentPrescription({ url, blob, fileName, textContent });
     } catch (error) {
-      console.error('Error downloading prescription:', error);
+      console.error('Error viewing prescription:', error);
+      alert('Failed to view prescription: ' + (error as Error).message);
+      setPrescriptionModalOpen(false);
+    } finally {
+      setPrescriptionLoading(false);
     }
   };
 
-  const handlePrescriptionView = (entry: HistoryEntry) => {
-    const prescriptionUrl = entry.prescription_url || entry.prescription_path || entry.prescription || entry.prescription_file;
-    if (!prescriptionUrl) {
-      console.error('No prescription URL available');
-      return;
-    }
-
-    // If it's a relative path, construct full URL
-    const fullUrl = prescriptionUrl.startsWith('http') 
-      ? prescriptionUrl 
-      : `${API_BASE_URL}/${prescriptionUrl.replace(/^\//, '')}`;
+  const handleDownloadFromModal = () => {
+    if (!currentPrescription) return;
     
-    // Open in new tab
-    window.open(fullUrl, '_blank');
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = currentPrescription.url;
+    a.download = currentPrescription.fileName;
+    
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(currentPrescription.url);
+    document.body.removeChild(a);
+    
+    console.log(`Prescription downloaded: ${currentPrescription.fileName}`);
   };
 
   // console.log(,"navigate")
@@ -569,41 +679,42 @@ const getRiskBadgeVariant = (level: any) => {
                           <TableCell>
                           {/* {JSON.stringfy(v)} */}
                             {/* {entry.prescription_path} */}
+                            
                             {(entry.prescription_path || entry.prescription_url || entry.prescription || entry.prescription_file) ? (
                               <div className="flex items-center gap-2">
-                                <Badge variant="secondary" className="text-xs">
-                                  <FileText className="h-3 w-3 mr-1" />
-                                  {/* Available */}
-                                </Badge>
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground text-xs">None</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              {(entry.prescription_path || entry.prescription_url || entry.prescription || entry.prescription_file) && (
-                                <>
+                                 <>
                                   <Button
                                     variant="outline"
                                     size="sm"
                                     onClick={() => handlePrescriptionView(entry)}
                                     className="h-9 w-9 p-0"
-                                    title="View Prescription"
+                                    title="ViewPrescription"
                                   >
                                     <Eye className="h-4 w-4" />
                                   </Button>
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => handlePrescriptionDownload(entry)}
+                                    onClick={() => handleDownload(entry)}
                                     className="h-9 w-9 p-0"
                                     title="Download Prescription"
+                                    disabled={downloadingPrescriptionId === entry.result_id}
                                   >
-                                    <Download className="h-4 w-4" />
+                                    {downloadingPrescriptionId === entry.result_id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Download className="h-4 w-4" />
+                                    )}
                                   </Button>
                                 </>
-                              )}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">N/A</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                           
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -824,6 +935,55 @@ const getRiskBadgeVariant = (level: any) => {
           </div>
         </div>
       </div>
+
+      {/* Prescription View Modal */}
+      <Dialog open={prescriptionModalOpen} onOpenChange={setPrescriptionModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>Prescription View</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col items-center">
+            {prescriptionLoading ? (
+              <div className="flex items-center justify-center h-64">
+                <div className="text-lg">Loading prescription...</div>
+              </div>
+            ) : currentPrescription ? (
+              <>
+             
+                <div className="border rounded-lg overflow-hidden max-w-full max-h-[70vh]">
+                  {currentPrescription.blob.type.startsWith('image/') ? (
+                    <img 
+                      src={currentPrescription.url} 
+                      alt="Prescription" 
+                      className="max-w-full max-h-[70vh] object-contain"
+                    />
+                  ) : currentPrescription.blob.type === 'application/pdf' ? (
+                    <iframe 
+                      src={currentPrescription.url} 
+                      className="w-full h-[70vh]"
+                      title="Prescription PDF"
+                    />
+                  ) : currentPrescription.blob.type.startsWith('text/') ? (
+                    <div className="p-4 bg-gray-50 max-h-[70vh] overflow-auto">
+                      <pre className="whitespace-pre-wrap text-sm">{currentPrescription.textContent || 'No text content available'}</pre>
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center">
+                      <FileText className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+                      <p className="text-gray-600 mb-4">
+                        This file type ({currentPrescription.blob.type}) cannot be previewed.
+                      </p>
+                      <Button onClick={handleDownloadFromModal}>
+                        Download to view
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   );
 }

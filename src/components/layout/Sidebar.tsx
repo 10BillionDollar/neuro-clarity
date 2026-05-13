@@ -18,6 +18,8 @@ const navigation = [
   { name: "Longitudinal", href: "/longitudinal", icon: TrendingUp },
   { name: "Model Evidence", href: "/evidence", icon: Shield },
   { name: "Settings", href: "/settings", icon: Settings },
+    { name: "Cognitive Assessment", href: "/cognitive-assessment", icon: Settings },
+
 ];
 
 export function Sidebar() {

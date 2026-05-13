@@ -2,7 +2,6 @@ import { Activity, AlertTriangle, Clock, Zap } from "lucide-react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { StatsCard } from "@/components/dashboard/StatsCard";
 import { ReportTable } from "@/components/dashboard/ReportTable";
-import { PatientTable } from "@/components/dashboard/PatientTable";
 import { FollowUpsSidebar } from "@/components/dashboard/FollowUpsSidebar";
 import { useEffect, useState } from "react";
 import { getPatientsDb, getPatientHistory } from "@/app/patients";
@@ -30,6 +29,7 @@ const Index = () => {
     if (!dateString) return false;
     const today = new Date();
     const checkDate = new Date(dateString);
+
     return (
       checkDate.getDate() === today.getDate() &&
       checkDate.getMonth() === today.getMonth() &&
@@ -37,11 +37,10 @@ const Index = () => {
     );
   };
 
-  // Function to check if risk level is high (includes all "high" risk types)
+  // Function to check high risk
   const isHighRisk = (riskLevel: string | undefined): boolean => {
     if (!riskLevel) return false;
     const risk = riskLevel.toLowerCase();
-    console.log("Checking risk level:", riskLevel, "-> includes high:", risk.includes("high"));
     return risk.includes("high");
   };
 
@@ -50,43 +49,59 @@ const Index = () => {
       try {
         const data = await getPatientsDb();
         const patientList = Array.isArray(data) ? data : data?.patients ?? [];
-        console.log("Fetched patients:", patientList);
 
-        // Fetch latest screening data for each patient
+        let totalTodaysScreens = 0;
+        const highRiskPatients = new Set<string>();
+
         const patientsWithScreenings = await Promise.all(
-          patientList.map(async (patient: Patient) => {
+          patientList.map(async (patient: any) => {
             try {
               const history = await getPatientHistory(patient.patient_code);
-              const latestScreening = history && history.length > 0 ? history[0] : null;
-              console.log(`Patient ${patient.patient_code} - Latest screening:`, latestScreening);
+              const screenings = Array.isArray(history) ? history : [];
+
+              // Count today's screenings for this patient
+              const todaysInThisPatient = screenings.filter((screen: any) => {
+                const date = screen?.date || screen?.created_at || screen?.report_date;
+                return isToday(date);
+              }).length;
+
+              totalTodaysScreens += todaysInThisPatient;
+
+              // Latest screening for display
+              const latestScreening = screenings.length > 0 ? screenings[0] : null;
+
+              const latestRisk = latestScreening?.risk_level || 
+                               latestScreening?.risk_band;
+
+              if (isHighRisk(latestRisk) || latestRisk === "High Cognitive Risk") {
+                highRiskPatients.add(patient.patient_code);
+              }
+
               return {
                 ...patient,
-                latestEEGDate: latestScreening?.date || latestScreening?.created_at || latestScreening?.report_date,
-                latestEEGQuality: latestScreening?.quality || latestScreening?.eeg_quality,
-                latestRiskLevel: latestScreening?.risk_level,
+                latestEEGDate: latestScreening?.date || 
+                              latestScreening?.created_at || 
+                              latestScreening?.report_date,
+                latestEEGQuality: latestScreening?.quality || 
+                                 latestScreening?.eeg_quality,
+                latestRiskLevel: latestRisk,
                 latestProbability: latestScreening?.probability,
                 latestScore: latestScreening?.internal_brain_health_score,
               };
             } catch (error) {
-              // If history fetch fails, return patient without screening data
+              console.error(`Error fetching history for ${patient.patient_code}:`, error);
               return patient;
             }
           })
         );
 
-        console.log("Patients with screenings:", patientsWithScreenings);
         setPatients(patientsWithScreenings);
+        setTodaysScreenCount(totalTodaysScreens);
+        setHighRiskCount(highRiskPatients.size);
 
-        // Calculate today's screens and high-risk counts
-        const todaysCount = patientsWithScreenings.filter(p => {
-          return isToday(p.latestEEGDate);
-        }).length;
+        console.log("✅ Today's Total Screenings:", totalTodaysScreens);
+        console.log("✅ High Risk Patients:", highRiskPatients.size);
 
-        const highRiskChecks = patientsWithScreenings.filter(p => p.risk_band === "High Cognitive Risk").length;
-
-        console.log("Today's count:", todaysCount, "High-risk count:", highRiskChecks);
-        setTodaysScreenCount(todaysCount);
-        setHighRiskCount(highRiskChecks);
       } catch (error) {
         console.error('Error fetching patients:', error);
       } finally {
@@ -96,6 +111,7 @@ const Index = () => {
 
     fetchPatients();
   }, []);
+
   return (
     <MainLayout>
       <div className="space-y-6">
@@ -123,7 +139,7 @@ const Index = () => {
           <StatsCard
             title={<span>Pending Reviews<br/><span className="text-xs text-muted-foreground font-normal">(To be launched)</span></span>}
             value={5}
-            subtitle="Aw  aiting assessment"
+            subtitle="Awaiting assessment"
             icon={Clock}
             variant="warning"
           />
@@ -140,21 +156,16 @@ const Index = () => {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Patient Table - Takes 2 columns */}
           <div className="lg:col-span-2">
-             <ReportTable
+            <ReportTable
               patients={patients}
               loading={loading}
-          />
+            />
           </div>
 
           {/* Follow-ups Sidebar */}
           <div className="lg:col-span-1">
             <FollowUpsSidebar />
           </div>
-        </div>
-
-        {/* Report Table */}
-        <div>
-       
         </div>
       </div>
     </MainLayout>

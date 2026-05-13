@@ -22,7 +22,8 @@ import {
 } from "@/components/ui/table";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { getPatientsDb, getPatientHistory } from "@/app/patients";
+import { getPatientHistory } from "@/app/patients";
+import { usePatients } from "@/app/PatientContext";
 
 interface Patient {
   patient_code: string;
@@ -60,6 +61,7 @@ const getRiskBadgeVariant = (level?: string) => {
 
 export function PatientTable({ patients: propPatients }: PatientTableProps = {}) {
   const navigate = useNavigate();
+  const { patients: contextPatients, loading: patientsLoading } = usePatients();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -118,48 +120,44 @@ export function PatientTable({ patients: propPatients }: PatientTableProps = {})
   const currentPatients = filteredPatients.slice((page - 1) * pageSize, page * pageSize);
 
   useEffect(() => {
-    const fetchPatients = async () => {
+    const processPatients = async () => {
       if (propPatients) {
         setPatients(propPatients);
         setLoading(false);
         return;
       }
 
-      try {
-        const data = await getPatientsDb();
-        const patientList = Array.isArray(data) ? data : data?.patients ?? [];
+      const patientList = contextPatients;
 
-        // Fetch latest screening data for each patient
-        const patientsWithScreenings = await Promise.all(
-          patientList.map(async (patient: Patient) => {
-            try {
-              const history = await getPatientHistory(patient.patient_code);
-              const latestScreening = history && history.length > 0 ? history[0] : null;
-              return {
-                ...patient,
-                latestEEGDate: latestScreening?.date || latestScreening?.created_at || latestScreening?.report_date,
-                latestEEGQuality: latestScreening?.quality || latestScreening?.eeg_quality,
-                latestRiskLevel: latestScreening?.risk_level,
-                latestProbability: latestScreening?.probability,
-                latestScore: latestScreening?.internal_brain_health_score,
-              };
-            } catch (error) {
-              // If history fetch fails, return patient without screening data
-              return patient;
-            }
-          })
-        );
+      // Fetch latest screening data for each patient
+      const patientsWithScreenings = await Promise.all(
+        patientList.map(async (patient: Patient) => {
+          try {
+            const history = await getPatientHistory(patient.patient_code);
+            const latestScreening = history && history.length > 0 ? history[0] : null;
+            return {
+              ...patient,
+              latestEEGDate: latestScreening?.date || latestScreening?.created_at || latestScreening?.report_date,
+              latestEEGQuality: latestScreening?.quality || latestScreening?.eeg_quality,
+              latestRiskLevel: latestScreening?.risk_level,
+              latestProbability: latestScreening?.probability,
+              latestScore: latestScreening?.internal_brain_health_score,
+            };
+          } catch (error) {
+            // If history fetch fails, return patient without screening data
+            return patient;
+          }
+        })
+      );
 
-        setPatients(patientsWithScreenings);
-      } catch (error) {
-        console.error('Error fetching patients:', error);
-      } finally {
-        setLoading(false);
-      }
+      setPatients(patientsWithScreenings);
+      setLoading(false);
     };
 
-    fetchPatients();
-  }, [propPatients]);
+    if (!patientsLoading) {
+      processPatients();
+    }
+  }, [propPatients, contextPatients, patientsLoading]);
 
   return (
     <div className="clinical-card overflow-hidden p-0">

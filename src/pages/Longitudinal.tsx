@@ -30,7 +30,7 @@ const Longitudinal = () => {
   const { patientId } = useParams();
   const navigate = useNavigate();
   const [allPatients, setAllPatients] = useState<any[]>([]);
-  const [selectedPatient, setSelectedPatient] = useState(patientId || '');
+  const [selectedPatient, setSelectedPatient] = useState('');
 
   useEffect(() => {
     const loadPatients = async () => {
@@ -56,9 +56,15 @@ const Longitudinal = () => {
 
   useEffect(() => {
     const fetchPatientData = async () => {
+      if (!patientId) {
+        setError('Please select a patient from the dropdown above');
+        setLoading(false);
+        return;
+      }
+      
       try {
         setLoading(true);
-        const data = await longitudinal(patientId || 'P001', {});
+        const data = await longitudinal(patientId);
         setPatientData(data);
         setError(null);
       } catch (err) {
@@ -137,8 +143,12 @@ const Longitudinal = () => {
                   </SelectContent>
                 </Select>
               </div>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-destructive">{error}</div>
+        <div className="flex flex-col items-center justify-center h-64 gap-4">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Users className="h-8 w-8" />
+            <span className="text-lg">No Patient Selected</span>
+          </div>
+          <div className="text-destructive text-center">{error}</div>
         </div>
       </MainLayout>
     );

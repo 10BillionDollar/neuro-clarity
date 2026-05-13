@@ -39,6 +39,7 @@ import { useState, useEffect, type ReactNode } from "react";
 import { getPatientHistory } from "@/app/patients";
 import { getRiskBadgeVariant, getRiskTextColorClass, getRiskBadgeVariantFromPercentage, getRiskLevelFromPercentage } from "@/lib/riskUtils";
 import { API_BASE_URL } from "@/app/config";
+import { fetchWithAuth } from "@/lib/fetchWithAuth";
 
 interface Patient {
   patient_code: string;
@@ -239,17 +240,41 @@ export function ReportTable({ patients, selectedPatientId, onEditPatient, onDele
     }
 
     try {
-      // If it's a relative path, construct full URL
-      const fullUrl = prescriptionUrl.startsWith('http') 
-        ? prescriptionUrl 
-        : `${API_BASE_URL}/${prescriptionUrl.replace(/^\//, '')}`;
+      let fullUrl: string;
+      let response: Response;
+
+      if (prescriptionUrl.startsWith('http') && prescriptionUrl.includes('storage.googleapis.com')) {
+        // For Google Cloud Storage, use backend proxy to avoid CORS
+        console.log('Using backend proxy for Google Cloud Storage URL');
+        fullUrl = `${API_BASE_URL}/proxy-download?url=${encodeURIComponent(prescriptionUrl)}`;
+        response = await fetchWithAuth(fullUrl);
+      } else if (prescriptionUrl.startsWith('http')) {
+        // For other external URLs, try direct fetch first
+        console.log('Attempting direct download from external URL');
+        fullUrl = prescriptionUrl;
+        response = await fetch(fullUrl);
+      } else {
+        // For relative paths, use authenticated fetch
+        fullUrl = `${API_BASE_URL}/${prescriptionUrl.replace(/^\//, '')}`;
+        response = await fetchWithAuth(fullUrl);
+      }
       
-      const response = await fetch(fullUrl);
+      console.log('Prescription download from:', fullUrl);
+      console.log('Response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error('Failed to download prescription');
+        const errorText = await response.text();
+        console.error('Prescription download failed:', errorText);
+        throw new Error(`Failed to download prescription: ${response.status} ${errorText}`);
       }
       
       const blob = await response.blob();
+      console.log('Prescription blob size:', blob.size, 'type:', blob.type);
+      
+      if (blob.size === 0) {
+        throw new Error('Downloaded prescription file is empty');
+      }
+      
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -258,8 +283,23 @@ export function ReportTable({ patients, selectedPatientId, onEditPatient, onDele
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
+      
+      console.log('Prescription download completed successfully');
     } catch (error) {
       console.error('Error downloading prescription:', error);
+      
+      // Fallback: open in new tab
+      try {
+        if (prescriptionUrl && prescriptionUrl.startsWith('http')) {
+          console.log('Fallback: opening prescription in new tab');
+          window.open(prescriptionUrl, '_blank');
+          alert('Prescription opened in new tab. Please save it manually.');
+        } else {
+          throw error;
+        }
+      } catch (fallbackError) {
+        alert(`Prescription download failed: ${error.message || 'Unknown error'}`);
+      }
     }
   };
 

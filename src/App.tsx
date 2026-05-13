@@ -17,6 +17,8 @@ import Login from "./app/Login";
 import Signup from "./app/Signup";
 import Patients from "./pages/Patients";
 import PatientHistory from "./pages/PatientHistory";
+import CognitiveAssessment from "./pages/Cognitive_Assessment";
+import ReportSummary from "./pages/ReportSummary";
 
 const queryClient = new QueryClient();
 
@@ -83,7 +85,7 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Evidence />
-                </ProtectedRoute>
+                </ProtectedRoute> 
               }
             />
             <Route
@@ -103,10 +105,26 @@ const App = () => (
               }
             />
             <Route
+              path="/cognitive-assessment"
+              element={
+                <ProtectedRoute>
+                  <CognitiveAssessment />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/patient-history/:patient_code"
               element={
                 <ProtectedRoute>
                   <PatientHistory />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/report-summary/:resultId"
+              element={
+                <ProtectedRoute>
+                  <ReportSummary />
                 </ProtectedRoute>
               }
             />
