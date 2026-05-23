@@ -3,7 +3,7 @@ import { fetchWithAuth } from "../lib/fetchWithAuth";
 
 // Generate PDF report
 export async function generatePDF(patientId: string) {
-  const res = await fetchWithAuth(`${API_BASE_URL}/reports/pdf/${patientId}`, {
+  const res = await fetchWithAuth(`${API_BASE_URL}/reports/pdf/${encodeURIComponent(patientId)}`, {
     method: "POST",
   });
   const blob = await res.blob();
@@ -13,15 +13,15 @@ export async function generatePDF(patientId: string) {
 
 // Fetch report data
 export async function getReport(patientId: string) {
-  const res = await fetchWithAuth(`${API_BASE_URL}/reports/${patientId}`, {
+  const res = await fetchWithAuth(`${API_BASE_URL}/reports/${encodeURIComponent(patientId)}`, {
     method: "GET",
   });
   return res.json();
 }
 
 // Download prescription by result ID
-export async function downloadPrescription(resultId: number) {
-  const res = await fetchWithAuth(`${API_BASE_URL}/download-prescription/${resultId}`, {
+export async function downloadPrescription(resultId: string | number) {
+  const res = await fetchWithAuth(`${API_BASE_URL}/download-prescription/${encodeURIComponent(String(resultId))}`, {
     method: "GET",
   });
   
@@ -69,7 +69,7 @@ export function canOpenInBrowser(mimeType: string): boolean {
 }
 
 // Get prescription data with file info
-export async function getPrescriptionData(resultId: number) {
+export async function getPrescriptionData(resultId: string | number) {
   const { url, blob } = await downloadPrescription(resultId);
   const fileExtension = getFileExtension(blob.type);
   const fileName = `prescription_${resultId}.${fileExtension}`;

@@ -252,7 +252,7 @@ const getFollowUpCalendar = async () => {
 
 const updateFollowUp = async (id: string, followUpData: Partial<FollowUp>) => {
   try {
-    const response = await fetchWithAuth(`${API_BASE_URL}/followups/${id}`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/followups/${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(followUpData)
@@ -266,7 +266,7 @@ const updateFollowUp = async (id: string, followUpData: Partial<FollowUp>) => {
 
 const deleteFollowUp = async (id: string) => {
   try {
-    await fetchWithAuth(`${API_BASE_URL}/followups/${id}`, {
+    await fetchWithAuth(`${API_BASE_URL}/followups/${encodeURIComponent(id)}`, {
       method: 'DELETE'
     });
   } catch (error) {

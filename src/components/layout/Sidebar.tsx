@@ -8,6 +8,8 @@ import {
   Shield,
   Settings,
   Users,
+  Menu,
+  X,
 } from "lucide-react";
 
 const navigation = [
@@ -22,12 +24,32 @@ const navigation = [
 
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  open: boolean;
+  onToggle: () => void;
+}
+
+export function Sidebar({ open, onToggle }: SidebarProps) {
   const location = useLocation();
 
   return (
-    <aside className="fixed left-0 top-16 z-40 h-[calc(100vh-4rem)] w-64 border-r border-border bg-sidebar">
-      <nav className="flex flex-col gap-1 p-4">
+    <aside
+      className={cn(
+        "fixed left-0 top-16 z-40 h-[calc(100vh-4rem)] border-r border-border bg-sidebar transition-all duration-300",
+        open ? "w-64" : "w-16"
+      )}
+    >
+      <div className={cn("flex h-8 items-center px-3 pt-1", open ? "justify-end" : "justify-center")}>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={open ? "Close sidebar" : "Open sidebar"}
+          className="grid h-8 w-8 place-items-center rounded-lg text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+        >
+          {open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+        </button>
+      </div>
+      <nav className="flex flex-col gap-1 px-4 pb-4 pt-1">
         {navigation.map((item) => {
           const isActive = location.pathname === item.href;
           return (
@@ -36,24 +58,28 @@ export function Sidebar() {
               to={item.href}
               className={cn(
                 "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
+                !open && "justify-center px-2",
                 isActive
                   ? "bg-sidebar-accent text-sidebar-accent-foreground"
                   : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
               )}
+              title={!open ? item.name : undefined}
             >
               <item.icon className={cn("h-5 w-5", isActive ? "text-primary" : "")} />
-              {item.name}
+              {open && item.name}
             </NavLink>
           );
         })}
       </nav>
 
       {/* Regulatory Footer */}
+      {open && (
       <div className="absolute bottom-0 left-0 right-0 border-t border-border bg-muted/30 p-4">
         <p className="text-xs text-muted-foreground leading-relaxed">
           This tool provides risk assessment and is not a clinical diagnosis. Always consult qualified medical professionals.
         </p>
       </div>
+      )}
     </aside>
   );
 }

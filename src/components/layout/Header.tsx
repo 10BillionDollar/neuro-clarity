@@ -1,4 +1,4 @@
-import { Brain, Settings, LogOut, User, Bell } from "lucide-react";
+import { Settings, LogOut, User, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -7,7 +7,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Badge } from "@/components/ui/badge";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/app/AuthContext";
 

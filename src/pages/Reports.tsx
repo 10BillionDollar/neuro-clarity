@@ -185,7 +185,7 @@ const Reports = () => {
                         <Button 
                           variant="ghost" 
                           size="sm"
-                          onClick={() => navigate(`/report/${report.patientId}`)}
+                          onClick={() => navigate(`/report/${encodeURIComponent(String(report.patientId))}`)}
                         >
                           <Eye className="mr-1 h-4 w-4" />
                           View
@@ -193,7 +193,7 @@ const Reports = () => {
                         <Button 
                           variant="ghost" 
                           size="sm"
-                          onClick={() => navigate(`/longitudinal/${report.patientId}`)}
+                          onClick={() => navigate(`/longitudinal/${encodeURIComponent(String(report.patientId))}`)}
                         >
                           <TrendingUp className="mr-1 h-4 w-4" />
                           Trends

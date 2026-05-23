@@ -9,7 +9,7 @@ export async function getPatients() {
 }
 
 export async function getPatientById(patientId: string) {
-  const res = await fetchWithAuth(`${API_BASE_URL}/patient-history/${patientId}`, {
+  const res = await fetchWithAuth(`${API_BASE_URL}/patient-history/${encodeURIComponent(patientId)}`, {
     method: "GET",
   });
   return res.json();
@@ -59,7 +59,7 @@ export async function createPatient(payload: PatientPayload) {
 }
 
 export async function editPatient(patientCode: string, payload: Partial<PatientPayload>) {
-  const res = await fetchWithAuth(`${API_BASE_URL}/edit-patient/${patientCode}`, {
+  const res = await fetchWithAuth(`${API_BASE_URL}/edit-patient/${encodeURIComponent(patientCode)}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -68,7 +68,7 @@ export async function editPatient(patientCode: string, payload: Partial<PatientP
 }
 
 export async function longitudinal(patientCode: string, payload: Partial<PatientPayload>) {
-  const res = await fetchWithAuth(`${API_BASE_URL}/longitudinal/${patientCode}`, {
+  const res = await fetchWithAuth(`${API_BASE_URL}/longitudinal/${encodeURIComponent(patientCode)}`, {
     method: "GET",
     headers: { "Content-Type": "application/json" },
   });
@@ -78,7 +78,7 @@ export async function longitudinal(patientCode: string, payload: Partial<Patient
 
 
 export async function historypreview(resulted: string, payload: Partial<PatientPayload>) {
-  const res = await fetchWithAuth(`${API_BASE_URL}/report-history/${resulted}`, {
+  const res = await fetchWithAuth(`${API_BASE_URL}/report-history/${encodeURIComponent(String(resulted))}`, {
     method: "GET",
     headers: { "Content-Type": "application/json" },
   });
@@ -87,7 +87,7 @@ export async function historypreview(resulted: string, payload: Partial<PatientP
 
 
 export async function deletePatient(patientCode: string) {
-  const res = await fetchWithAuth(`${API_BASE_URL}/delete-patient/${patientCode}`, {
+  const res = await fetchWithAuth(`${API_BASE_URL}/delete-patient/${encodeURIComponent(patientCode)}`, {
     method: "DELETE",
   });
   return handleResponse(res);
@@ -99,7 +99,7 @@ export async function getPatientHistory(patientCode: string) {
   }
 
   // Removed sessionStorage cache - no persistent storage
-  const res = await fetchWithAuth(`${API_BASE_URL}/patient-history/${patientCode}`, {
+  const res = await fetchWithAuth(`${API_BASE_URL}/patient-history/${encodeURIComponent(patientCode)}`, {
     method: "GET",
   });
   return handleResponse(res);

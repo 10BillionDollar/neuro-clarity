@@ -9,6 +9,15 @@ export function getAuthToken(): string | null {
   return localStorage.getItem('token');
 }
 
+// Utility functions for patient ID encoding/decoding
+export function encodePatientId(patientId: string): string {
+  return btoa(encodeURIComponent(patientId));
+}
+
+export function decodePatientId(encodedPatientId: string): string {
+  return decodeURIComponent(atob(encodedPatientId));
+}
+
 export interface JwtPayload {
   sub?: string;
   name?: string;

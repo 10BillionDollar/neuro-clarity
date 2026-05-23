@@ -58,7 +58,8 @@ interface HistoryEntry {
 }
 
 export default function PatientHistory() {
-  const { patient_code } = useParams<{ patient_code: string }>();
+  const { patient_code: patientCodeParam } = useParams<{ patient_code: string }>();
+  const patient_code = patientCodeParam ? decodeURIComponent(atob(patientCodeParam)) : "";
   const navigate = useNavigate();
   const { user } = useAuth();
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -147,7 +148,7 @@ export default function PatientHistory() {
 
 const toggleRowExpansion = (rowId: string | number) => {
   //  console.log(rowId,"rowId")
-  navigate(`/report/${rowId}`, { state: { patientCode: patient_code, reportId: rowId, fromPatientHistory: true } });
+  navigate(`/report/${encodeURIComponent(String(rowId))}`, { state: { patientCode: patient_code, reportId: encodeURIComponent(String(rowId)), fromPatientHistory: true } });
   };
 
 const handleDownload = async (entry: HistoryEntry) => {
@@ -727,7 +728,7 @@ const getRiskBadgeVariant = (level: any) => {
                               {/* <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => navigate(`/longitudinal/${patient_code}`)}
+                                onClick={() => navigate(`/longitudinal/${btoa(encodeURIComponent(patient_code))}`)}
                                 title="View Longitudinal Trends"
                               >
                                 <TrendingUp className="mr-1 h-4 w-4" />
@@ -736,7 +737,7 @@ const getRiskBadgeVariant = (level: any) => {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => navigate(`/patient-report/${patient_code}`, { state: { patient: patienData } })}
+                                onClick={() => navigate(`/patient-report/${btoa(encodeURIComponent(patient_code))}`, { state: { patient: patienData } })}
                                 title="View Patient Report"
                               >
                                 <Eye className="mr-1 h-4 w-4" />

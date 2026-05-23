@@ -224,3 +224,56 @@
     --tw-ring-color: #003e59 !important;
   }
 }
+@media print {
+
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  html,
+  body {
+    width: 210mm;
+    height: 297mm;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: #fff;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  #print-report,
+  #print-report * {
+    visibility: visible;
+  }
+
+  #print-report {
+
+    position: absolute;
+
+    top: 0;
+
+    left: 50%;
+    transform: translateX(-50%);
+
+    width: 210mm;
+
+    padding: 8mm !important;
+
+    background: white;
+
+    zoom: 89%;
+
+    overflow: hidden !important;
+  }
+
+  img,
+  svg,
+  canvas {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+}

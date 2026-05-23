@@ -8,7 +8,6 @@ import { fetchWithAuth } from "@/lib/fetchWithAuth";
 import { API_BASE_URL } from "@/app/config";
 import { cn } from "@/lib/utils";
 import {
-  ArrowLeft,
   Brain,
   Calendar,
   Download,
@@ -20,6 +19,14 @@ import {
   FileText,
   ClipboardList,
   Stethoscope,
+  ShieldCheck,
+  CheckCircle2,
+  Moon,
+  Dumbbell,
+  BarChart3,
+  Network,
+  UserRoundCheck,
+  Sparkles,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
@@ -32,6 +39,23 @@ type BiomarkerKey =
   | "gamma_activity_ratio"
   | "posterior_dominance_index"
   | "occipital_entropy";
+
+type SpriteIconName =
+  | "patient"
+  | "ageGender"
+  | "assessmentDate"
+  | "brain"
+  | "network"
+  | "memory"
+  | "gamma"
+  | "shield"
+  | "meditation"
+  | "running"
+  | "desk"
+  | "sleep"
+  | "checklist"
+  | "heart"
+  | "clinicalNote";
 
 interface Biomarker {
   value: number | string;
@@ -56,6 +80,11 @@ interface ReportData {
     summary?: string[];
     affected_domains?: string[];
     possible_neural_regions?: string[];
+  };
+  cognitive_decline_assessment?: {
+    dementia_likelihood?: string;
+    possible_conditions?: string[];
+    risk_interpretation?: string;
   };
   key_neurophysiological_observations?: Array<{
     observation: string;
@@ -90,10 +119,10 @@ interface ApiResponse {
 const BIOMARKER_ORDER: { key: BiomarkerKey; label: string }[] = [
   { key: "frontal_theta_beta_ratio", label: "Frontal Theta / Beta Ratio" },
   { key: "memory_theta_alpha_ratio", label: "Memory Theta / Alpha Ratio" },
-  { key: "cognitive_decline_index", label: "Cognitive Decline Index" },
-  { key: "gamma_activity_ratio", label: "Gamma Activity Ratio" },
   { key: "posterior_dominance_index", label: "Posterior Dominance Index" },
   { key: "occipital_entropy", label: "Occipital Entropy" },
+  { key: "cognitive_decline_index", label: "Cognitive Decline Index" },
+  { key: "gamma_activity_ratio", label: "Gamma Activity Ratio" },
 ];
 
 const statusStyles = (status?: string) => {
@@ -130,11 +159,52 @@ const riskColor = (risk?: string) => {
   return "text-foreground";
 };
 
-const ReportSummary = () => {
+const SPRITE_ICON_POSITIONS: Record<SpriteIconName, string> = {
+  patient: "10% 8%",
+  ageGender: "29% 8%",
+  assessmentDate: "71% 8%",
+  brain: "12% 39%",
+  network: "28% 39%",
+  memory: "58% 39%",
+  gamma: "77% 39%",
+  shield: "23% 72%",
+  meditation: "35% 72%",
+  running: "47% 72%",
+  desk: "69% 72%",
+  sleep: "35% 92%",
+  checklist: "26% 92%",
+  heart: "91% 72%",
+  clinicalNote: "88% 92%",
+};
+
+const SpriteIcon = ({
+  name,
+  className,
+}: {
+  name: SpriteIconName;
+  className?: string;
+}) => (
+  <span
+    className={cn("inline-block shrink-0 bg-no-repeat", className)}
+    style={{
+      backgroundImage: "url('/report-icons-sprite.png')",
+      backgroundPosition: SPRITE_ICON_POSITIONS[name],
+      backgroundSize: "620% auto",
+    }}
+  />
+);
+
+interface ReportSummaryProps {
+  embedded?: boolean;
+  embeddedResultId?: string;
+}
+
+const ReportSummary = ({ embedded = false, embeddedResultId }: ReportSummaryProps = {}) => {
   const { resultId: resultIdParam } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
   const resultId =
+    embeddedResultId ||
     (resultIdParam ? decodeURIComponent(resultIdParam) : undefined) ||
     location.state?.resultId;
 
@@ -146,9 +216,16 @@ const ReportSummary = () => {
   const reportRef = useRef<HTMLDivElement>(null);
   const [searchParams] = useSearchParams();
   const autoPrint = searchParams.get("print") === "1";
+  const POLL_INTERVAL_MS = 5000;
+  const MAX_POLL_ATTEMPTS = 24;
+  const wrapContent = (content: React.ReactNode) =>
+    embedded ? <>{content}</> : <MainLayout>{content}</MainLayout>;
 
   useEffect(() => {
     let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let attempts = 0;
+
     const load = async () => {
       if (!resultId) {
         setError("Missing result ID in the URL.");
@@ -156,6 +233,7 @@ const ReportSummary = () => {
         return;
       }
       try {
+        attempts += 1;
         const res = await fetchWithAuth(
           `${API_BASE_URL}/report-summary/data/${encodeURIComponent(resultId)}`
         );
@@ -167,18 +245,32 @@ const ReportSummary = () => {
         setStatus(data.status);
         if (data.status === "success" && data.report_data) {
           setReport(data.report_data);
+          setLoading(false);
         } else {
           setReport(null);
+          // For embedded mode, don't poll as much - assume data should be available
+          const maxAttempts = embedded ? 3 : MAX_POLL_ATTEMPTS;
+          if (attempts < maxAttempts) {
+            timeoutId = setTimeout(load, POLL_INTERVAL_MS);
+          } else {
+            setLoading(false);
+          }
         }
       } catch (e: any) {
-        if (!cancelled) setError(e?.message || "Failed to load report.");
-      } finally {
-        if (!cancelled) setLoading(false);
+        // For embedded mode, fail faster
+        const maxAttempts = embedded ? 3 : MAX_POLL_ATTEMPTS;
+        if (!cancelled && attempts < maxAttempts) {
+          timeoutId = setTimeout(load, POLL_INTERVAL_MS);
+        } else if (!cancelled) {
+          setError(e?.message || "Failed to load report.");
+          setLoading(false);
+        }
       }
     };
     load();
     return () => {
       cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
     };
   }, [resultId]);
 
@@ -189,99 +281,107 @@ const ReportSummary = () => {
       return () => clearTimeout(t);
     }
   }, [autoPrint, report, loading]);
+// ==================== SIRF REPORT CONTAINER KA SCREENSHOT ====================
+const handleReportScreenshot = async () => {
+  // if (!reportRef.current) {
+  //   alert("Report abhi load nahi hua hai!");
+  //   return;
+  // }
 
-  const handleDownloadPdf = async () => {
-    if (!reportRef.current) return;
-    setPdfLoading(true);
-    const reportElement = reportRef.current;
-    const originalWidth = reportElement.style.width;
-    const originalMaxWidth = reportElement.style.maxWidth;
-    const originalMargin = reportElement.style.margin;
-    const originalBorderRadius = reportElement.style.borderRadius;
-    const originalTransform = reportElement.style.transform;
-    try {
-      reportElement.style.width = "1120px";
-      reportElement.style.maxWidth = "1120px";
-      reportElement.style.margin = "0 auto";
-      reportElement.style.borderRadius = "0";
-      reportElement.style.transform = "translateZ(0)";
-      await new Promise((resolve) => requestAnimationFrame(resolve));
+  // const element = reportRef.current;
 
-      const canvas = await html2canvas(reportElement, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#ffffff",
-        logging: false,
-        width: reportElement.scrollWidth,
-        height: reportElement.scrollHeight,
-        windowWidth: 1280,
-        windowHeight: reportElement.scrollHeight,
-        scrollX: 0,
-        scrollY: 0,
-      });
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF("p", "mm", "a4");
-      const pdfWidth = 210;
-      const pdfHeight = 297;
-      const pageMargin = 6;
-      const imgWidth = pdfWidth - pageMargin * 2;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      const pageContentHeight = pdfHeight - pageMargin * 2;
-      let heightLeft = imgHeight;
-      let position = pageMargin;
-      pdf.addImage(imgData, "PNG", pageMargin, position, imgWidth, imgHeight);
-      heightLeft -= pageContentHeight;
-      while (heightLeft > 0) {
-        position = pageMargin - (imgHeight - heightLeft);
-        pdf.addPage();
-        pdf.addImage(imgData, "PNG", pageMargin, position, imgWidth, imgHeight);
-        heightLeft -= pageContentHeight;
-      }
-      const patientId = report?.patient_information?.patient_id || "report";
-      pdf.save(
-        `cognitive_report_${patientId}_${new Date()
-          .toISOString()
-          .split("T")[0]}.pdf`
-      );
-    } catch (e) {
-      console.error("PDF generation failed", e);
-      alert("Failed to generate PDF. Please try again.");
-    } finally {
-      reportElement.style.width = originalWidth;
-      reportElement.style.maxWidth = originalMaxWidth;
-      reportElement.style.margin = originalMargin;
-      reportElement.style.borderRadius = originalBorderRadius;
-      reportElement.style.transform = originalTransform;
-      setPdfLoading(false);
-    }
-  };
+  // // Original styles backup
+  // const originalStyles = {
+  //   width: element.style.width,
+  //   maxWidth: element.style.maxWidth,
+  //   margin: element.style.margin,
+  //   padding: element.style.padding,
+  //   borderRadius: element.style.borderRadius,
+  //   boxShadow: element.style.boxShadow,
+  // };
 
+  // try {
+  //   // Clean aur perfect size ke liye force kiya
+  //   element.style.width = "1180px";
+  //   element.style.maxWidth = "1180px";
+  //   element.style.margin = "0";
+  //   element.style.padding = "40px 35px";
+  //   element.style.borderRadius = "0";
+  //   element.style.boxShadow = "none";
+
+  //   await new Promise(resolve => setTimeout(resolve, 150));
+
+  //   const canvas = await html2canvas(element, {
+  //     scale: 2.6,                    // Achhi quality
+  //     useCORS: true,
+  //     backgroundColor: "#ffffff",
+  //     logging: false,
+  //     letterRendering: true,
+  //     allowTaint: true,
+  //   });
+
+  //   const link = document.createElement("a");
+  //   link.download = `NEMA_Cognitive_Report_${new Date().toISOString().split("T")[0]}.png`;
+  //   link.href = canvas.toDataURL("image/png", 0.95);
+  //   link.click();
+
+  // } catch (err) {
+  //   console.error(err);
+  //   alert("Screenshot lene mein problem aayi");
+  // } finally {
+  //   // Wapas original style laga do
+  //   Object.assign(element.style, originalStyles);
+  // }
+   if (!reportRef.current) return;
+
+  const printWindow = window.open("", "_blank");
+
+  if (printWindow) {
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Patient Report</title>
+          <style>
+            body {
+              padding: 20px;
+              font-family: Arial, sans-serif;
+            }
+          </style>
+        </head>
+        <body>
+          ${reportRef.current.innerHTML}
+        </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+
+    printWindow.onload = () => {
+      printWindow.focus();
+      printWindow.print();
+      printWindow.close();
+    };
+  }
+};
   // -------- Loading --------
   if (loading) {
-    return (
-      <MainLayout>
-        <PageLoader text="Loading report summary..." />
-      </MainLayout>
-    );
+    return wrapContent(<PageLoader text="Loading report summary..." />);
   }
 
   // -------- Error --------
   if (error) {
-    return (
-      <MainLayout>
+    return wrapContent(
         <div className="grid justify-items-center content-center py-16 text-center">
           <AlertCircle className="h-12 w-12 text-destructive mb-3" />
           <p className="text-destructive font-medium">{error}</p>
         </div>
-      </MainLayout>
     );
   }
 
   // -------- Processing state (do not render partial report) --------
   if (status === "processing" || !report) {
-    return (
-      <MainLayout>
-        <div className="grid justify-items-center content-center py-20 text-center">
+    return wrapContent(
+        <div className="grid justify-items-center content-center py-20 text-center" style={{display:"flex",alignItems:"center"}}>
           <div className="h-16 w-16 rounded-full bg-primary/10 grid place-items-center mb-4">
             <Activity className="h-8 w-8 text-primary animate-pulse" />
           </div>
@@ -292,7 +392,6 @@ const ReportSummary = () => {
             Please check back in a moment.
           </p>
         </div>
-      </MainLayout>
     );
   }
 
@@ -300,6 +399,7 @@ const ReportSummary = () => {
   const overall = report.overall_assessment || {};
   const biomarkers = report.eeg_biomarkers || {};
   const clinical = report.clinical_interpretation || {};
+  const cognitiveDecline = report.cognitive_decline_assessment || {};
   const observations = report.key_neurophysiological_observations || [];
   const followup = report.recommended_followup || {};
   const lifestyle = report.lifestyle_and_preventive_recommendations || {};
@@ -312,24 +412,15 @@ const ReportSummary = () => {
       : 0;
   const riskRingColor = (() => {
     const r = (overall.risk_level || "").toLowerCase();
-    if (r.includes("high")) return "#dc2626"; // red-600
+    if (r.includes("high")) return "#ef4444"; // red-500
     if (r.includes("moderate")) return "#d97706"; // amber-600
     if (r.includes("low")) return "#16a34a"; // green-600
     return "#1e3a8a";
   })();
 
-  const biomarkerIconColors = [
-    "from-violet-100 to-violet-200 text-violet-600",
-    "from-emerald-100 to-emerald-200 text-emerald-600",
-    "from-rose-100 to-rose-200 text-rose-600",
-    "from-sky-100 to-sky-200 text-sky-600",
-    "from-blue-100 to-blue-200 text-blue-600",
-    "from-orange-100 to-orange-200 text-orange-600",
-  ];
-
   const SectionNumber = ({ n }: { n: number }) => (
-    <span className="inline-block h-7 w-7 rounded-full bg-blue-900 text-center align-top text-white text-[16px] font-bold leading-7">
-      {n}
+    <span className=" h-6 w-6 shrink-0 block text-center rounded-full bg-[#003e59] text-white text-[13px] font-medium ">
+     <span className="block mb-[10px]"> {n}</span>
     </span>
   );
 
@@ -342,13 +433,11 @@ const ReportSummary = () => {
     title: string;
     className?: string;
   }) => (
-    <div className="mb-3 grid grid-cols-[28px_minmax(0,1fr)] items-start gap-2">
-      <span className="w-7 shrink-0">
-        <SectionNumber n={n} />
-      </span>
+    <div className="mb-3 grid grid-cols-[28px_1fr] items-center gap-2" >
+      <SectionNumber n={n} />
       <h2
         className={cn(
-          "min-w-0 text-sm font-bold uppercase tracking-wide leading-tight pt-1",
+          "min-w-0 whitespace-nowrap text-[13px] text-[#003e59] font-bold uppercase tracking-tight ",
           className
         )}
       >
@@ -357,208 +446,236 @@ const ReportSummary = () => {
     </div>
   );
 
-  return (
-    <MainLayout>
+  const biomarkerCards = [
+    {
+      key: "frontal_theta_beta_ratio" as BiomarkerKey,
+      short: "Frontal",
+      name: "Theta / Beta Ratio",
+      Icon: <img src="/icon_marker1.png" alt=""/>,
+      color: "text-purple-700",
+      bg: "bg-purple-100",
+    },
+    {
+      key: "memory_theta_alpha_ratio" as BiomarkerKey,
+      short: "Memory",
+      name: "Theta – Alpha Ratio",
+      Icon: <img src="/icon_marker2.png" alt=""/>,
+      color: "text-emerald-700",
+      bg: "bg-emerald-100",
+    },
+    {
+      key: "posterior_dominance_index" as BiomarkerKey,
+      short: "Posterior",
+      name: "Dominance Index",
+      Icon: <img src="/icon_marker3.png" alt=""/>,
+      color: "text-blue-700",
+      bg: "bg-blue-100",
+    },
+    {
+      key: "occipital_entropy" as BiomarkerKey,
+      short: "Occipital",
+      name: "Entropy",
+      Icon: <img src="/icon_marker4.png" alt=""/>,
+      color: "text-orange-600",
+      bg: "bg-orange-100",
+    },
+    {
+      key: "cognitive_decline_index" as BiomarkerKey,
+      short: "Cognitive",
+      name: "Decline Index",
+      Icon: BarChart3,
+      color: "text-red-600",
+      bg: "bg-red-100",
+    },
+    {
+      key: "gamma_activity_ratio" as BiomarkerKey,
+      short: "Gamma",
+      name: "Activity Ratio",
+      Icon: Activity,
+      color: "text-amber-600",
+      bg: "bg-amber-100",
+    },
+  ];
+
+  const firstObservation = observations[0];
+  const secondObservation = observations[1];
+  const summaryText =
+    Array.isArray(clinical.summary) && clinical.summary.length > 0
+      ? clinical.summary.join(" ")
+      : "The patient's cognitive risk percentage coupled with EEG biomarker changes indicates potential neural network dysfunction, particularly in brain regions associated with executive functions and attention.";
+  const affectedDomains =
+    Array.isArray(clinical.affected_domains) && clinical.affected_domains.length > 0
+      ? clinical.affected_domains
+      : [];
+  const neuralRegions =
+    Array.isArray(clinical.possible_neural_regions) && clinical.possible_neural_regions.length > 0
+      ? clinical.possible_neural_regions
+      : [];
+  const possibleConditions =
+    Array.isArray(cognitiveDecline.possible_conditions) && cognitiveDecline.possible_conditions.length > 0
+      ? cognitiveDecline.possible_conditions
+      : [];
+  const followupItems =
+    Array.isArray(followup.clinical_recommendations) &&
+    followup.clinical_recommendations.length > 0
+      ? followup.clinical_recommendations
+      : [
+          "Comprehensive Neuropsychological Assessment",
+          "Brain Imaging (MRI / PET as indicated)",
+          "Neurology Consultation",
+          "Movement Disorder Evaluation (if applicable)",
+          "Longitudinal Monitoring",
+        ];
+  const lifestyleItems =
+    Array.isArray(lifestyle.recommendations) && lifestyle.recommendations.length > 0
+      ? lifestyle.recommendations
+      : [
+          "Optimize Sleep Hygiene",
+          "Stress Management",
+          "Regular Physical Activity",
+          "Cognitive Enrichment",
+          "Reduce Cognitive Overload",
+        ];
+  const integrationItems =
+    Array.isArray(note.recommended_integration) && note.recommended_integration.length > 0
+      ? note.recommended_integration
+      : [];
+
+  return wrapContent(
+    <>
       {/* Print styles: hide app chrome, only show captured report */}
       <style>{`
-        @media print {
-        *{padding:0;margin:0;box-sizing:border-box}
-          @page { size: A4; margin: 10mm; }
-          body { background: white !important; font-size: 14px !important; }
-          /* Hide everything by default */
-          body * { visibility: hidden !important; }
-          /* Show only the captured report */
-          #print-report, #print-report * { visibility: visible !important; }
-          #print-report {
-            position: absolute !important;
-            left: 0; top: 0;
-            width: 100% !important;
-            margin: 0 !important;
-            padding: 12px !important;
-            box-shadow: none !important;
-            font-size: 16px !important;
-          }
-            // #print-report .grid{}
-          #print-report h1 { font-size: 28px !important; }
-          #print-report h2 { font-size: 20px !important; }
-          #print-report h3 { font-size: 17px !important; }
-          #print-report p, #print-report li, #print-report span { font-size: 16px !important; }
-          .no-print { display: none !important; }
-        }
+      @media print {
+  #print-report {
+    width: 1180px !important;
+    max-width: 1180px !important;
+    margin: 0 auto !important;
+    box-shadow: none !important;
+    // padding: 20px !important;
+  }
+
+  #print-report * {
+    -webkit-print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Grid aur Flex ko stable rakho */
+  #print-report .grid {
+    display: grid !important;
+  }
+  
+  #print-report .flex {
+    display: flex !important;
+  }
+}
       `}</style>
 
       <div className="space-y-4">
-        {/* Top action bar - excluded from screenshot & print */}
-        <div className="grid grid-cols-1 sm:grid-cols-[auto_auto] sm:justify-between sm:items-center gap-2 no-print">
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => navigate(-1)}
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </Button>
-          <Button
-            className="gap-2"
-            onClick={handleDownloadPdf}
-            disabled={pdfLoading}
-          >
-            <Download className="h-4 w-4" />
-            {pdfLoading ? "Generating PDF..." : "Download as PDF"}
-          </Button>
-        </div>
-
-        {/* Captured report */}
-        <div
+              <div
           ref={reportRef}
           id="print-report"
-          className="bg-white text-slate-900 p-4 sm:p-6 md:p-8 rounded-xl shadow-sm space-y-5 text-[15px] md:text-base leading-relaxed overflow-hidden"
+          className=" gap-4 rounded-2xl border border-border/50 bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between" 
         >
-          {/* 1. Header */}
-          <header className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_minmax(0,1fr)] gap-4 items-center pb-4 border-b">
-            <div className="grid grid-cols-[48px_minmax(0,1fr)] items-center justify-items-center lg:justify-items-start gap-2 min-w-0">
-              <div className="h-12 w-12 rounded-full bg-blue-900/10 grid place-items-center">
-                <Brain className="h-7 w-7 text-blue-900" />
+          <header className="grid -4 grid-cols-[250px_minmax(0,1fr)_245px] items-start gap-5 border-b border-slate-200 pb-5">
+            <div className="grid grid-cols-[48px_minmax(0,1fr)] items-center gap-3">
+              <div className="grid place-items-center p-[5px]">
+               <img src="/logo2.png" alt="logo2" className="h-[100%] w-[100%]" />
               </div>
-              <div className="text-[16px] min-w-0">
-                <p className="font-bold text-blue-900">freeiym</p>
-                <p className="text-slate-500 leading-tight">Cognitive Health Intelligence</p>
+              <div>
+                <p className="text-[25px] font-medium  tracking-tight text-slate-950">NEMA AI</p>
+                <p className="mt-1 text-[10px] font-semibold tracking-wide text-slate-600">Cognitive Health Intelligence</p>
               </div>
             </div>
-
-            <div className="text-center min-w-0">
-              <h1 className="text-xl md:text-[20px] font-extrabold tracking-tight text-blue-900 uppercase leading-tight">
+            <div className="text-center">
+              <h1 className="text-[22px] font-black font-[500] uppercase leading-[1.05] tracking-tight text-[#082c73]">
                 Cognitive &amp; Neural Function
                 <br />
                 Assessment Summary
               </h1>
-              <p className="text-sm text-slate-500 mt-1">
+              <p className="mt-2 text-[14px] font-medium text-slate-600">
                 EEG-Based Biomarker Insights for Early Detection &amp;
                 Cognitive Wellness
               </p>
             </div>
-
-            <div className="w-full text-sm rounded-lg border bg-slate-50 px-3 py-2 space-y-1 justify-self-center lg:justify-self-end lg:max-w-[260px]">
-              <div className="grid grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-2">
-                <User className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                <span className="text-slate-500 whitespace-nowrap">Patient ID :</span>
-                <span className="font-semibold truncate text-right">{pi.patient_id ?? "—"}</span>
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-[12px] shadow-md">
+              <div className="grid grid-cols-[20px_86px_1fr] items-center gap-2 py-1">
+                <User className="h-4 w-4 text-[#082c73]" />
+                <span className="font-bold">Patient ID</span>
+                <span className="font-bold">: {pi.patient_id ?? "XXXX-1234"}</span>
               </div>
-              <div className="grid grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-2">
-                <Heart className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                <span className="text-slate-500 whitespace-nowrap">Age / Gender :</span>
-                <span className="font-semibold truncate text-right">
-                  {pi.age ?? "—"} / {pi.gender ?? "—"}
-                </span>
+              <div className="grid grid-cols-[20px_86px_1fr] items-center gap-2 py-1">
+                <Stethoscope className="h-4 w-4 text-[#082c73]" />
+                <span className="font-bold">Age / Gender</span>
+                <span className="font-bold">: {pi.age ?? "38"} / {pi.gender ?? "Male"}</span>
               </div>
-              <div className="grid grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-2">
-                <Calendar className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                <span className="text-slate-500 whitespace-nowrap">Date :</span>
-                <span className="font-semibold truncate text-right">
-                  {pi.assessment_date ?? "—"}
-                </span>
+              <div className="grid grid-cols-[20px_86px_1fr] items-center gap-2 py-1">
+                <img src="/calendar.png" alt="calendar" className="h-4 w-4 text-[#082c73]" />
+                <span className="font-bold">Date</span>
+                <span className="font-bold">: {pi.assessment_date ?? "20 May 2025"}</span>
               </div>
             </div>
           </header>
-
-          {/* 2 & 3 — Overall Risk + Biomarker Highlights side-by-side */}
-          <section className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-stretch">
-            {/* Overall Risk donut */}
-            <div className="lg:col-span-2 rounded-xl bg-blue-900 text-white p-5 h-full">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-center mb-3">
+          <section className="mt-5 grid grid-cols-[340px_minmax(0,1fr)] gap-5">
+            <div className="overflow-hidden rounded-2xl bg-[#003e59] text-white shadow-lg">
+              <div className="bg-white/10 py-2.5 text-center text-[16px] font-semibold font-black uppercase tracking-wide">
                 Overall Cognitive Risk
-              </h2>
-              <div className="grid mt-10 grid-cols-[128px_minmax(0,1fr)] items-center justify-center gap-4">
-                {/* SVG Donut */}
-                <div className="relative h-32 w-32 shrink-0">
+              </div>
+              <div className="grid grid-cols-[170px_minmax(0,1fr)] items-center gap-3 px-5 pb-7 pt-5">
+                <div className="relative h-40 w-40">
                   <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
-                    <circle
-                      cx="60"
-                      cy="60"
-                      r="50"
-                      fill="none"
-                      stroke="rgba(255,255,255,0.15)"
-                      strokeWidth="12"
-                    />
-                    <circle
-                      cx="60"
-                      cy="60"
-                      r="50"
-                      fill="none"
-                      stroke={riskRingColor}
-                      strokeWidth="12"
-                      strokeLinecap="round"
-                      strokeDasharray={`${(Math.min(Math.max(riskScore, 0), 100) * 314) / 100} 314`}
-                    />
+                    <circle cx="60" cy="60" r="48" fill="none" stroke="#f7b23b" strokeWidth="12" />
+                    <circle cx="60" cy="60" r="48" fill="none" stroke={riskRingColor} strokeWidth="12" strokeLinecap="round" strokeDasharray={`${(Math.min(Math.max(riskScore || 72, 0), 100) * 302) / 100} 302`} />
                   </svg>
-                  <div className="absolute inset-0 grid justify-items-center content-center">
-                    <span className="text-2xl font-extrabold leading-none">
-                      {(overall.risk_level || "—")
-                        .split(" ")[0]
-                        ?.toUpperCase()}
-                    </span>
-                    <span className="text-[16px] tracking-wider opacity-80">
-                      RISK
-                    </span>
+                  <div className="absolute inset-0 grid place-items-center text-center">
+                    <div>
+                      <p className="text-[31px] font-black ">{(overall.risk_level || "High").split(" ")[0].toUpperCase()}</p>
+                      <p className="mt-1 text-[20px] font-medium">RISK</p>
+                    </div>
                   </div>
                 </div>
                 <div>
-                  <p className="text-sm opacity-80">Cognitive Risk Score</p>
+                  <p className="text-[13px] font-bold text-white/90">Cognitive Risk Score</p>
                   <p
-                    className="text-4xl font-extrabold"
+                    className="mt-2 text-[44px] font-black "
                     style={{ color: riskRingColor }}
                   >
                     {typeof overall.cognitive_risk_score_percent === "number"
                       ? `${Math.round(overall.cognitive_risk_score_percent)}%`
-                      : "—"}
+                      : "72%"}
                   </p>
-                  <p className="text-[16px] opacity-75 mt-1  leading-tight">
-                    ({overall.summary ?? "compared to age-matched norms"})
+                  <p className="mt-3 text-[12px] font-medium leading-snug text-white/85">
+                    {overall.summary || "Elevated compared to age-matched norms"}
                   </p>
                 </div>
               </div>
             </div>
-
-            {/* Biomarker highlights (first 4 in fixed order) */}
-            <div className="lg:col-span-3 rounded-xl bg-blue-900 text-white p-4 h-full">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-center mb-3">
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md">
+              <div className="bg-[#003e59] py-2.5 text-center text-[16px] font-black font-semibold uppercase tracking-wide text-white">
                 Key EEG Biomarker Highlights
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 bg-white rounded-lg p-3 text-slate-800">
-                {BIOMARKER_ORDER.slice(0, 4).map(({ key, label }, idx) => {
-                  const b = biomarkers[key];
-                  if (!b) return null;
+              </div>
+              <div className="grid grid-cols-4 bg-white">
+                {biomarkerCards.slice(0, 4).map(({ key, short, name, Icon, color, bg }) => {
+                  const b = biomarkers[key] || { value: "N/A", status: "N/A", clinical_significance: "No biomarker data available." };
                   const styles = statusStyles(b.status);
                   return (
-                    <div
-                      key={key}
-                      className="grid justify-items-center text-center min-w-0"
-                    >
-                      <div
-                        className={cn(
-                          "h-12 w-12 rounded-full bg-gradient-to-br grid place-items-center mb-1",
-                          biomarkerIconColors[idx]
-                        )}
-                      >
-                        <Brain className="h-6 w-6" />
+                    <div key={key} className="grid justify-items-center border-r border-slate-100 px-3 py-4 text-center last:border-r-0">
+                      <div className={cn("grid h-14 w-14 place-items-center rounded-2xl")}>
+                        {Icon}
                       </div>
-                      <p className="text-sm font-semibold leading-tight break-words">
-                        {label}
+                      <p className="mt-2 text-[11px] font-black leading-tight text-slate-800">
+                        {short}
+                        <br />
+                        {name}
                       </p>
-                      <p className="text-xl font-extrabold mt-0.5">
+                      <p className={cn("mt-2 text-[27px] font-black ", color)}>
                         {typeof b.value === "number"
                           ? b.value.toFixed(2)
                           : b.value}
                       </p>
-                      <span
-                        className={cn(
-                          "mt-0.5 text-[11px] uppercase font-bold tracking-wide px-2 py-0.5 rounded border",
-                          styles.badge
-                        )}
-                      >
+                      <span className={cn("mt-2 rounded-full border px-2.5 py-1 text-[9px] font-black uppercase tracking-wide", styles.badge)}>
                         {b.status}
                       </span>
-                      <p className="text-[11px] text-slate-600 mt-1 leading-tight break-words">
+                      <p className="mt-2 text-[10.5px] font-medium leading-snug text-slate-600">
                         {b.clinical_significance}
                       </p>
                     </div>
@@ -567,264 +684,192 @@ const ReportSummary = () => {
               </div>
             </div>
           </section>
-
-          {/* Remaining biomarkers (5 & 6) — separate row so all 6 shown */}
-          {BIOMARKER_ORDER.slice(4).some(({ key }) => biomarkers[key]) && (
-            <section className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {BIOMARKER_ORDER.slice(4).map(({ key, label }, idx) => {
-                const b = biomarkers[key];
-                if (!b) return null;
-                const styles = statusStyles(b.status);
-                return (
-                  <div
-                    key={key}
-                    className={cn(
-                      "rounded-lg border p-3 grid grid-cols-[40px_minmax(0,1fr)] items-start gap-3 min-w-0",
-                      styles.ring
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        "h-10 w-10 rounded-full bg-gradient-to-br grid place-items-center",
-                        biomarkerIconColors[idx + 4]
-                      )}
-                    >
-                      <Activity className="h-5 w-5" />
+          <section className="mt-5 grid grid-cols-2 gap-5">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <SectionHeader n={1} title="Clinical Interpretation" />
+              <div className="grid grid-cols-[150px_minmax(0,1fr)] gap-4">
+                <div className="grid place-items-center rounded-2xl ">
+                  <div className="relative h-32 w-36">
+                   <img src="/brain_1.png" alt="brain" className=" h-[100%]"/>
+                  </div>
+                </div>
+                <p className="text-[14.5px] font-medium leading-relaxed text-slate-900">
+                  {summaryText}
+                </p>
+              </div>
+              {(affectedDomains.length > 0 || neuralRegions.length > 0) && (
+                <div className="mt-4 grid grid-cols-2 gap-3 text-[12px]">
+                  {affectedDomains.length > 0 && (
+                    <div className="rounded-xl border border-purple-100 bg-purple-50 px-3 py-2.5">
+                      <p className="font-medium text-purple-700">Affected Domains</p>
+                      <p className="mt-1 font-medium text-slate-800">{affectedDomains.join(", ")}</p>
                     </div>
-                    <div className="min-w-0">
-                      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
-                        <h3 className="text-sm font-bold text-slate-800 break-words">
-                          {label}
-                        </h3>
-                        <span
-                          className={cn(
-                            "text-[11px] uppercase font-bold tracking-wide px-2 py-0.5 rounded border",
-                            styles.badge
-                          )}
-                        >
-                          {b.status}
-                        </span>
-                      </div>
-                      <p className="text-xl font-extrabold">
-                        {typeof b.value === "number"
-                          ? b.value.toFixed(2)
-                          : b.value}
+                  )}
+                  {neuralRegions.length > 0 && (
+                    <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5">
+                      <p className="font-medium text-blue-700">Possible Neural Regions</p>
+                      <p className="mt-1 font-medium text-slate-800">{neuralRegions.join(", ")}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="relative flex items-start rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div>
+              <SectionHeader n={2} title="Dementia / Cognitive Decline Likelihood" />
+             
+              <p className="pr-20 text-[14.5px] font-medium leading-relaxed text-slate-900">
+                {cognitiveDecline.dementia_likelihood || "Not diagnostic at current stage."}
+              </p>
+              {possibleConditions.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1.5 pr-20">
+                  {possibleConditions.map((condition) => (
+                    <Badge key={condition} variant="secondary" className="rounded-full px-2.5  text-[10.5px] font-bold">
+                      {condition} 
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              <div className="mt-4 grid grid-cols-[48px_minmax(0,1fr)] items-center rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] font-medium leading-relaxed text-slate-800">
+                <BarChart3 className="h-9 w-9 text-emerald-600" />
+                <p>{cognitiveDecline.risk_interpretation || "Early identification enables proactive monitoring, lifestyle optimization, and better long-term outcomes."}</p>
+              </div>
+              </div>
+               <img src="/shield1.png" className=" w-[80px]" alt="shield"/>
+            </div>
+          </section>
+          <section className="mt-5 grid grid-cols-2 gap-5">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <SectionHeader n={3} title="Key Concerning Abnormalities" />
+              <div className="space-y-4">
+                <div className="grid grid-cols-[70px_minmax(0,1fr)] gap-4">
+                  <div className="grid h-16 w-16 place-items-center rounded-full bg-blue-100 text-blue-700">
+                    <Network className="h-10 w-10" />
+                  </div>
+                  <div>
+                    <h3 className="text-[15px] font-medium text-[#082c73]">{firstObservation?.observation || "Elevated Posterior Dominance Index"}</h3>
+                    <p className="mt-1.5 text-[13.5px] font-medium leading-relaxed text-slate-900">
+                      {firstObservation?.interpretation || "The increased posterior dominance activity may represent a compensatory mechanism to maintain functionality despite abnormal frontal activity. If persistent, it may be associated with cognitive fatigue, reduced processing efficiency, and increased neural workload."}
+                    </p>
+                    {firstObservation?.potential_implications?.length ? (
+                      <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-[11.5px] font-bold text-slate-700">
+                        {firstObservation.potential_implications.join(" • ")}
                       </p>
-                      <p className="text-sm text-slate-600 leading-tight break-words">
-                        {b.clinical_significance}
+                    ) : null}
+                  </div>
+                </div>
+                {secondObservation ? (
+                  <div className="grid grid-cols-[70px_minmax(0,1fr)] gap-4">
+                    <div className="grid h-16 w-16 place-items-center rounded-full bg-orange-100 text-orange-600">
+                      <Activity className="h-10 w-10" />
+                    </div>
+                    <div>
+                      <h3 className="text-[15px] font-medium text-[#082c73]">{secondObservation.observation}</h3>
+                      <p className="mt-1.5 text-[13.5px] font-medium leading-relaxed text-slate-900">
+                        {secondObservation.interpretation}
+                      </p>
+                      {secondObservation.potential_implications?.length ? (
+                        <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-[11.5px] font-bold text-slate-700">
+                          {secondObservation.potential_implications.join(" • ")}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+            <div className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+             <img src="/calendar.png" alt="calendar" className="absolute right-5 top-5 h-12 w-12 text-[#082c73]" />
+              <SectionHeader n={4} title="Recommended Clinical Follow-up" />
+              {followup.purpose && (
+                <p className="pr-12 text-[13px] font-medium leading-relaxed text-slate-800">{followup.purpose}</p>
+              )}
+              <div className="mt-3 divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-100 bg-slate-50/60">
+                {followupItems.slice(0, 5).map((item, i) => (
+                  <div key={i} className="grid grid-cols-[28px_minmax(0,1fr)] items-start gap-2 bg-white/70 px-3 py-2.5">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 text-slate-600" />
+                    <div>
+                      <p className="text-[12.5px] font-medium text-[#082c73]">{item}</p>
+                      <p className="text-[11.5px] leading-snug text-slate-700">
+                        {i === 0 && "Detailed evaluation of memory, attention, executive function & more."}
+                        {i === 1 && "To assess structural or functional changes."}
+                        {i === 2 && "Specialist evaluation for underlying neurological causes."}
+                        {i === 3 && "If tremors, slowing, rigidity or other motor symptoms are present."}
+                        {i === 4 && "Repeat EEG & cognitive assessments to track changes over time."}
                       </p>
                     </div>
                   </div>
-                );
-              })}
-            </section>
-          )}
-
-          {/* 4 & 5 — Clinical Interpretation + Observations (two columns) */}
-          <section className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
-            {/* 4. Clinical Interpretation */}
-            <div className="rounded-xl border p-4 h-full">
-              <SectionHeader n={1} title="Clinical Interpretation" />
-              {Array.isArray(clinical.summary) &&
-              clinical.summary.length > 0 ? (
-                <ul className="space-y-1.5">
-                  {clinical.summary.map((line, i) => (
-                    <li
-                      key={i}
-                      className="grid grid-cols-[6px_minmax(0,1fr)] items-start gap-2 text-[16px] text-slate-700 leading-relaxed"
-                    >
-                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-blue-900 shrink-0" />
-                      <span className="min-w-0 break-words">{line}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-[16px] text-muted-foreground">
-                  No interpretation available.
-                </p>
-              )}
-              {(clinical.affected_domains?.length ||
-                clinical.possible_neural_regions?.length) && (
-                <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(120px,max-content))] gap-1.5 pt-3 border-t">
-                  {clinical.affected_domains?.map((d, i) => (
-                    <Badge
-                      key={`d-${i}`}
-                      variant="outline"
-                      className="bg-rose-50 border-rose-200 text-rose-700 text-[16px]"
-                    >
-                      {d}
-                    </Badge>
-                  ))}
-                  {clinical.possible_neural_regions?.map((d, i) => (
-                    <Badge
-                      key={`r-${i}`}
-                      variant="outline"
-                      className="bg-violet-50 border-violet-200 text-violet-700 text-[16px]"
-                    >
-                      {d}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* 5. Neurophysiological Observations */}
-            <div className="rounded-xl border p-4 h-full">
-              <SectionHeader n={2} title="Neurophysiological Observations" />
-              {observations.length > 0 ? (
-                <div className="space-y-2">
-                  {observations.map((obs, i) => (
-                    <div
-                      key={i}
-                      className="rounded-lg border bg-white p-3"
-                    >
-                      <h3 className="text-sm font-bold text-slate-800">
-                        {obs.observation}
-                      </h3>
-                      <p className="mt-1 text-sm text-slate-600 leading-relaxed">
-                        {obs.interpretation}
-                      </p>
-                      {obs.potential_implications &&
-                        obs.potential_implications.length > 0 && (
-                          <div className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(120px,max-content))] gap-1">
-                            {obs.potential_implications.map((imp, j) => (
-                              <Badge
-                                key={j}
-                                variant="outline"
-                                className="bg-blue-50 border-blue-200 text-blue-700 text-[16px]"
-                              >
-                                {imp}
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-[16px] text-muted-foreground">
-                  No observations available.
-                </p>
-              )}
+                ))}
+              </div>
             </div>
           </section>
-
-          {/* 6 & 7 — Follow-up + Lifestyle (two columns) */}
-          <section className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
-            {/* 6. Follow-up Recommendations */}
-            <div className="rounded-xl border p-4 h-full">
-              <SectionHeader n={3} title="Recommended Clinical Follow-up" />
-              {followup.purpose && (
-                <p className="text-[16px] text-muted-foreground mb-2 italic">
-                  {followup.purpose}
-                </p>
-              )}
-              {Array.isArray(followup.clinical_recommendations) &&
-              followup.clinical_recommendations.length > 0 ? (
-                <ul className="space-y-1.5">
-                  {followup.clinical_recommendations.map((rec, i) => (
-                    <li
-                      key={i}
-                      className="grid grid-cols-[14px_minmax(0,1fr)] items-start gap-2 text-[16px] text-slate-700"
-                    >
-                      <ClipboardList className="h-3.5 w-3.5 text-blue-900 mt-0.5 shrink-0" />
-                      <span className="min-w-0 break-words">{rec}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-[16px] text-muted-foreground">
-                  No follow-up recommendations.
-                </p>
-              )}
-            </div>
-
-            {/* 7. Lifestyle Recommendations */}
-            <div className="rounded-xl border bg-emerald-50/40 p-4 h-full">
-              <SectionHeader
-                n={4}
-                title="Lifestyle & Preventive"
-                className="text-emerald-700"
-              />
-              {Array.isArray(lifestyle.recommendations) &&
-              lifestyle.recommendations.length > 0 ? (
-                <div className="grid grid-cols-1 gap-1.5">
-                  {lifestyle.recommendations.map((rec, i) => (
-                    <div
-                      key={i}
-                      className="grid grid-cols-[14px_minmax(0,1fr)] items-start gap-2 text-[16px] rounded-md bg-white border px-2.5 py-1.5"
-                    >
-                      <Leaf className="h-3.5 w-3.5 text-emerald-600 mt-0.5 shrink-0" />
-                      <span className="text-slate-700 min-w-0 break-words">{rec}</span>
-                    </div>
-                  ))}
+          <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <SectionHeader n={5} title="Lifestyle & Preventive Recommendations" />
+            <div className="grid grid-cols-2 gap-5">
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-5">
+                <div className="mx-auto mb-4 w-fit rounded-full bg-emerald-600 px-8 py-1.5 text-[12px] font-bold text-white shadow-sm">
+                  Cognitive &amp; Lifestyle Support
                 </div>
-              ) : (
-                <p className="text-[16px] text-muted-foreground">
-                  No lifestyle recommendations.
-                </p>
-              )}
-              {lifestyle.mental_health_consideration && (
-                <div className="mt-3 rounded-md bg-purple-50 border border-purple-200 p-2">
-                  <p className="text-[16px] text-purple-800 italic leading-tight">
-                    <span className="font-semibold not-italic">Mental Health:</span>{" "}
-                    {lifestyle.mental_health_consideration}
+                <div className="grid grid-cols-5 gap-2 text-center">
+                  {lifestyleItems.slice(0, 5).map((title, index) => {
+                    const Icon = [Moon, Stethoscope, Dumbbell, Brain, UserRoundCheck][index] || Leaf;
+                    return (
+                    <div key={title} className="grid justify-items-center gap-2 rounded-xl bg-white px-2 py-3 shadow-sm">
+                      <Icon className="h-9 w-9 text-emerald-600" />
+                      <p className="text-[10.5px] font-medium leading-tight text-slate-800">{title}</p>
+                    </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-4 rounded-xl bg-white px-4 py-3 text-center text-[12.5px] font-medium text-slate-800 shadow-sm">
+                  These habits help strengthen cognitive reserve, improve neural efficiency and overall well-being.
+                </div>
+              </div>
+              <div className="rounded-2xl border border-purple-100 bg-purple-50/40 p-5">
+                <div className="mx-auto mb-4 w-fit rounded-full bg-purple-100 px-9 py-1.5 text-[12px] font-medium text-purple-700">
+                  Mental Health Evaluation
+                </div>
+                <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-4">
+                  <div className="grid h-16 w-16 place-items-center rounded-full ">
+                    <img src="/human_1.png" alt=""/>
+                  </div>
+                  <p className="text-[13.5px] font-medium leading-relaxed text-slate-900">
+                    {lifestyle.mental_health_consideration || "A psychological or psychiatric consultation may be beneficial. Conditions such as anxiety, depression, chronic stress, or burnout can significantly impact cognitive performance and EEG biomarkers."}
                   </p>
                 </div>
-              )}
+                <div className="mt-6 rounded-xl bg-purple-100 px-4 py-3 text-center text-[12.5px] font-semibold text-purple-900">
+                  Early support leads to better outcomes.
+                </div>
+              </div>
             </div>
           </section>
-
-          {/* 8. Clinical Disclaimer */}
-          <section className="rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 p-4">
-            <div className="grid grid-cols-[16px_minmax(0,1fr)] items-center gap-2 mb-2">
-              <AlertCircle className="h-4 w-4 text-blue-900" />
-              <h2 className="text-sm font-bold uppercase tracking-wider text-blue-900">
+          <section className="mt-5 grid grid-cols-[56px_minmax(0,1fr)_150px] items-center rounded-2xl border border-blue-100 bg-blue-50/60 px-5 py-4">
+            <div className="grid h-11 w-11 place-items-center rounded-full bg-white text-[#082c73] shadow-sm">
+              <Heart className="h-7 w-7" />
+            </div>
+            <div>
+              <h2 className="text-[16px] font-medium uppercase text-[#082c73]">
                 Clinical Note
               </h2>
-            </div>
-            {note.important_notice && (
-              <p className="text-[16px] text-slate-700 leading-relaxed">
-                {note.important_notice}
+              <p className="text-[12.5px] font-medium leading-relaxed text-slate-800">
+                {note.important_notice || "These findings should be interpreted as supportive neurophysiological indicators and not as a standalone diagnosis. EEG-based cognitive biomarkers are most valuable when integrated with clinical history, behavioral symptoms, neuropsychological testing, and longitudinal follow-up."}
               </p>
-            )}
-            {Array.isArray(note.recommended_integration) &&
-              note.recommended_integration.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-[16px] font-semibold text-slate-600 mb-1">
-                    Recommended Integration:
-                  </p>
-                  <div className="grid grid-cols-[repeat(auto-fit,minmax(120px,max-content))] gap-1">
-                    {note.recommended_integration.map((item, i) => (
-                      <Badge
-                        key={i}
-                        variant="outline"
-                        className="bg-white border-slate-300 text-slate-700 text-[16px]"
-                      >
-                        {item}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
+              {integrationItems.length > 0 && (
+                <p className="mt-1.5 text-[11px] font-bold text-slate-700">
+                  Recommended integration: {integrationItems.join(", ")}
+                </p>
               )}
+            </div>
+            <Network className="h-24 w-24 justify-self-center text-blue-200" />
           </section>
-
-          {/* Footer (metadata) */}
-          <footer className="text-center border-t bg-blue-900 -mx-4 sm:-mx-6 md:-mx-8 px-4 sm:px-6 md:px-8 py-[5px] rounded-b-xl">
-            <p className="text-sm text-white font-semibold tracking-wide">
+          <footer className="-mx-5 -mb-5 mt-4 bg-gradient-to-r from-[#082c73] via-[#0a3b89] to-[#082c73] py-3 text-center">
+            <p className="text-[14px] font-semibold tracking-wide text-white">
               Early Insight. Better Decisions. Healthier Tomorrow.
             </p>
-            {report.report_metadata && (
-              <p className="text-[11px] text-white/60 mt-0.5">
-                {report.report_metadata.generated_by} •{" "}
-                {report.report_metadata.generated_at} •{" "}
-                {report.report_metadata.schema_version}
-              </p>
-            )}
           </footer>
         </div>
       </div>
-    </MainLayout>
+    </>
   );
 };
 

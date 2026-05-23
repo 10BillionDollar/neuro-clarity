@@ -104,14 +104,7 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/cognitive-assessment"
-              element={
-                <ProtectedRoute>
-                  <CognitiveAssessment />
-                </ProtectedRoute>
-              }
-            />
+           
             <Route
               path="/patient-history/:patient_code"
               element={

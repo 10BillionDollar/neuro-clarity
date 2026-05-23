@@ -522,7 +522,7 @@ export function ReportTable({ patients, selectedPatientId, onEditPatient, onDele
                         <Button
                          variant="ghost" 
                           size="sm"
-                          onClick={() => navigate(`/patient-history/${patient.patient_code}`, { state: { patient } })}
+                          onClick={() => navigate(`/patient-history/${btoa(encodeURIComponent(patient.patient_code))}`, { state: { patient } })}
                           title="View Screening History"
                         >
                           <Eye className="mr-1 h-4 w-4" />
@@ -531,7 +531,7 @@ export function ReportTable({ patients, selectedPatientId, onEditPatient, onDele
                         <Button 
                           variant="ghost" 
                           size="sm"
-                          onClick={() => navigate(`/longitudinal/${patient.patient_code}`)}
+                          onClick={() => navigate(`/longitudinal/${encodeURIComponent(patient.patient_code)}`)}
                           title="View Longitudinal Trends"
                         >
                           <TrendingUp className="mr-1 h-4 w-4" />

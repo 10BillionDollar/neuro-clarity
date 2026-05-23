@@ -240,7 +240,7 @@ export function PatientTable({ patients: propPatients }: PatientTableProps = {})
                     <Button 
                       variant="ghost" 
                       size="sm"
-                      onClick={() => navigate(`/patient-history/${patient.patient_code}`)}
+                      onClick={() => navigate(`/patient-history/${btoa(encodeURIComponent(patient.patient_code))}`)}
                       title="View History"
                     >
                       <Eye className="h-4 w-4" />
@@ -248,7 +248,7 @@ export function PatientTable({ patients: propPatients }: PatientTableProps = {})
                     <Button 
                       variant="ghost" 
                       size="sm"
-                      onClick={() => navigate(`/longitudinal/${patient.patient_code}`)}
+                      onClick={() => navigate(`/longitudinal/${encodeURIComponent(patient.patient_code)}`)}
                       title="View Trends"
                     >
                       <TrendingUp className="h-4 w-4" />

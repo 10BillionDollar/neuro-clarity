@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { useParams, useLocation, useNavigate } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,12 +30,12 @@ import {
   Info,
   Activity,
   Eye,
-  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fetchWithAuth } from "@/lib/fetchWithAuth";
 import { API_BASE_URL } from "@/app/config";
 import { downloadPrescription, getFileExtension } from "@/app/reports";
+import ReportSummary from "./ReportSummary";
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import {
@@ -185,7 +185,6 @@ const TrendIcon = ({ trend }: { trend: "up" | "down" | "stable" }) => {
 const PatientReport = () => {
   const { jobId: jobIdParam } = useParams();
   const location = useLocation();
-  const navigate = useNavigate();
   const jobId = jobIdParam ? decodeURIComponent(jobIdParam) : undefined;
   const [graphsExpanded, setGraphsExpanded] = useState(false);
   const [explainabilityExpanded, setExplainabilityExpanded] = useState(false);
@@ -193,7 +192,8 @@ const PatientReport = () => {
   
   // Check if navigated from patient history page
   const fromPatientHistory = location.state?.fromPatientHistory || false;
-  const reportId = location.state?.reportId || jobId;
+  const reportId = location.state?.reportId ? decodeURIComponent(location.state.reportId) : jobId;
+  const POLL_INTERVAL_MS = 5000;
 
   const [patientData, setPatientData] = useState(initialPatientData);
   const [cognitiveMarkers, setCognitiveMarkers] = useState(initialCognitiveMarkers);
@@ -205,6 +205,7 @@ const PatientReport = () => {
   const [screenshotPdfLoading, setScreenshotPdfLoading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeReportTab, setActiveReportTab] = useState<"analysis" | "summary">("summary");
   
   // Prescription modal state
   const [prescriptionModalOpen, setPrescriptionModalOpen] = useState(false);
@@ -234,6 +235,14 @@ const PatientReport = () => {
       model: "",
     },
   });
+  const summaryResultId =
+    patientInfo?.result_id ??
+    patientInfo?.resultId ??
+    patientInfo?.report?.result_id ??
+    patientInfo?.data?.result_id ??
+    (fromPatientHistory ? reportId : null);
+
+  console.log('summaryResultId:', summaryResultId, 'fromPatientHistory:', fromPatientHistory, 'reportId:', reportId);
 
   const getRiskBadgeVariant = (level: string) => {
     if (!level) return "secondary";
@@ -245,6 +254,9 @@ const PatientReport = () => {
   };
 
   useEffect(() => {
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
     const loadCardAndGraphData = async () => {
       if (!reportId) return;
 
@@ -265,25 +277,54 @@ const PatientReport = () => {
           }
         }
 
-        if (cardsData) {
+        const hasReportData = Boolean(cardsData?.cards || cardsData?.patient_info || cardsData?.rf_risk);
+        const isAiSuccess = cardsData?.ai_status === "success";
+
+        if (cardsData && hasReportData) {
           setCognitiveMarkers(cardsData.cards ?? cardsData);
           setPatientInfo(cardsData);
+        }
+
+        // Stop polling if we have data from either source
+        if (!cancelled && (hasReportData || (fromPatientHistory && cardsData))) {
           setIsLoading(false);
         }
 
-        // Load graphs data (this can be called regardless of navigation source)
+        if (!cancelled && !hasReportData && !fromPatientHistory) {
+          timeoutId = setTimeout(loadCardAndGraphData, POLL_INTERVAL_MS);
+          return;
+        }
+
         const encodedJobId = reportId ? encodeURIComponent(reportId) : "";
         const graphsRes = await fetchWithAuth(`${API_BASE_URL}/graphs/${encodedJobId}`);
         if (graphsRes.ok) {
           const graphDataResponse = await graphsRes.json();
           setGraphData(graphDataResponse);
         }
+
+        if (!cancelled && hasReportData && !isAiSuccess && !fromPatientHistory) {
+          timeoutId = setTimeout(loadCardAndGraphData, POLL_INTERVAL_MS);
+          return;
+        }
+
+        if (!cancelled) {
+          setIsLoading(false);
+        }
       } catch (error) {
         console.error("Error loading report data:", error);
+        if (!cancelled && !fromPatientHistory) {
+          timeoutId = setTimeout(loadCardAndGraphData, POLL_INTERVAL_MS);
+        } else if (!cancelled && fromPatientHistory) {
+          setIsLoading(false);
+        }
       }
     };
 
     loadCardAndGraphData();
+    return () => {
+      cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [fromPatientHistory, reportId]);
 
   // historypreview(jobId).then((data) => {
@@ -307,7 +348,8 @@ const PatientReport = () => {
     setDownloadError(null);
 
     try {
-      const endpoint = `${API_BASE_URL}/download/${reportId}${format === "csv" ? "?format=csv" : ""}`;
+      const encodedReportId = reportId ? encodeURIComponent(reportId) : "";
+      const endpoint = `${API_BASE_URL}/download/${encodedReportId}${format === "csv" ? "?format=csv" : ""}`;
       console.log("Attempting download from:", endpoint);
       
       const res = await fetchWithAuth(endpoint);
@@ -343,7 +385,8 @@ const PatientReport = () => {
       // Try alternative method if first fails
       try {
         console.log("Trying alternative download method...");
-        const endpoint = `${API_BASE_URL}/download/${reportId}${format === "csv" ? "?format=csv" : ""}`;
+        const encodedReportId = reportId ? encodeURIComponent(reportId) : "";
+        const endpoint = `${API_BASE_URL}/download/${encodedReportId}${format === "csv" ? "?format=csv" : ""}`;
         
         // Open in new tab as fallback
         window.open(endpoint, '_blank');
@@ -503,55 +546,75 @@ const PatientReport = () => {
   };
 
   const handleScreenshotPdf = async () => {
-    if (!reportRef.current) {
-      console.error("Report ref not available");
-      return;
-    }
+    setDownloadError(null);
 
-    setScreenshotPdfLoading(true);
+    // if (!reportRef.current) {
+    //   console.error("Report ref not available");
+    //   setDownloadError("Report content is not ready yet. Please wait a moment and try again.");
+    //   return;
+    // }
 
-    try {
-      // Capture the report content as a canvas
-      const canvas = await html2canvas(reportRef.current, {
-        scale: 2, // Higher scale for better quality
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-      });
+    // setScreenshotPdfLoading(true);
 
-      const imgData = canvas.toDataURL('image/png');
+    // const reportElement = reportRef.current;
+    // const originalWidth = reportElement.style.width;
+    // const originalMaxWidth = reportElement.style.maxWidth;
+    window.print()
+
+
+    // try {
+    //   // reportElement.style.width = "1180px";
+    //   // reportElement.style.maxWidth = "1180px";
+    //   // reportElement.style.margin = "0";
+    //   //       reportElement.style.padding = "0";
+
+    //   reportElement.style.transform = "translateY(0)";
+    //   await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    //   // Capture the report content as a canvas
+    //   const canvas = await html2canvas(reportElement, {
+    //     scale: 2, // Higher scale for better quality
+    //     useCORS: true,
+    //     // logging: false,
+    //     backgroundColor: '#ffffff',
+    //     // width: reportElement.scrollWidth,
+    //     // height: reportElement.scrollHeight ,
+    //     // windowWidth: 1280,
+    //     // windowHeight: reportElement.scrollHeight,
+    //     scrollX: 0,
+    //     scrollY: 0,
+    //   });
+
+    //   const imgData = canvas.toDataURL('image/png');
       
-      // Calculate PDF dimensions
-      const imgWidth = 210; // A4 width in mm
-      const pageHeight = 297; // A4 height in mm
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      
-      // Create PDF
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      let heightLeft = imgHeight;
-      let position = 0;
+    //   const pdf = new jsPDF('p', 'mm', 'a4');
+    //   const pageWidth = pdf.internal.pageSize.getWidth();
+    //   const pageHeight = pdf.internal.pageSize.getHeight();
+    //   const pageMargin = 0;
+    //   const maxWidth = pageWidth - pageMargin * 2;
+    //   const maxHeight = pageHeight - pageMargin * 2;
+    //   const imageRatio = canvas.width / canvas.height;
+    //   const pageRatio = maxWidth / maxHeight;
+    //   const imgWidth = imageRatio > pageRatio ? maxWidth : maxHeight * imageRatio;
+    //   const imgHeight = imageRatio > pageRatio ? maxWidth / imageRatio : maxHeight;
+    //   const x = (pageWidth - imgWidth) / 2;
+    //   const y = (pageHeight - imgHeight) / 2;
 
-      // Add first page
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
+    //   pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
 
-      // Add additional pages if needed
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
-
-      // Save the PDF
-      const patientName = patientInfo?.patient_info?.name || 'Patient';
-      pdf.save(`patient_report_screenshot_${patientName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
-    } catch (error) {
-      console.error('Error generating screenshot PDF:', error);
-      alert('Failed to generate PDF screenshot. Please try again.');
-    } finally {
-      setScreenshotPdfLoading(false);
-    }
+    //   // Save the PDF
+    //   const patientName = patientInfo?.patient_info?.name || 'Patient';
+    //   pdf.save(`patient_report_screenshot_${patientName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
+    // } catch (error) {
+    //   console.error('Error generating screenshot PDF:', error);
+    //   alert('Failed to generate PDF screenshot. Please try again.');
+    // } finally {
+    //   reportElement.style.width = originalWidth;
+    //   reportElement.style.maxWidth = originalMaxWidth;
+    //   // reportElement.style.margin = originalMargin;
+    //   // reportElement.style.transform = originalTransform;
+    //   setScreenshotPdfLoading(false);
+    // }
   };
 
   const markerItems = Array.isArray(cognitiveMarkers)
@@ -689,6 +752,7 @@ const PatientReport = () => {
 
   const riskPercentage = patientInfo?.rf_risk?.percentage ?? patientInfo?.decline_summary?.percent ?? "N/A";
   const riskCategory = patientInfo?.rf_risk?.category ?? "N/A";
+  const isAiRecommendationLoading = patientInfo?.ai_status && patientInfo.ai_status !== "success" && !patientInfo?.ai_summary && !fromPatientHistory;
 
 
 
@@ -747,30 +811,64 @@ const PatientReport = () => {
     <MainLayout>
       <div className="space-y-6">
         {/* Top action bar */}
-        <div className="flex justify-end gap-2">
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() =>
-              reportId &&
-              navigate(`/report-summary/${encodeURIComponent(reportId)}`)
-            }
-            disabled={!reportId}
-          >
-            <FileText className="h-4 w-4" />
-            View Summary Report
-          </Button>
-          <Button
-            className="gap-2"
-            onClick={handleScreenshotPdf}
-            disabled={screenshotPdfLoading}
-          >
-            <Download className="h-4 w-4" />
-            {screenshotPdfLoading ? "Generating PDF..." : "Download Report as PDF"}
-          </Button>
-        </div>
+        <div className="flex mb-5 flex-col gap-4 rounded-2xl border border-border/50 bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+  
+  {/* Tabs */}
+  <div className="inline-flex w-fit  rounded-xl bg-muted/70 p-1">
+    <button
+      type="button"
+      onClick={() => setActiveReportTab("summary")}
+      disabled={!summaryResultId}
+      className={cn(
+        "relative rounded-lg px-5 py-2.5 text-sm font-medium transition-all duration-200",
+        activeReportTab === "summary"
+          ? "bg-background text-foreground shadow-md"
+          : "text-muted-foreground hover:bg-background/60 hover:text-foreground",
+        !summaryResultId && "cursor-not-allowed opacity-50"
+      )}
+    >
+      Report Summary
+    </button>
 
-        <div ref={reportRef} className="space-y-6 bg-background p-2">
+    <button
+      type="button"
+      onClick={() => setActiveReportTab("analysis")}
+      className={cn(
+        "relative rounded-lg px-5 py-2.5 text-sm font-medium transition-all duration-200",
+        activeReportTab === "analysis"
+          ? "bg-background text-foreground shadow-md"
+          : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
+      )}
+    >
+      Cognitive Analysis
+    </button>
+  </div>
+
+{activeReportTab !== "analysis" && (
+ <div className="flex justify-end">
+    <Button
+      className="gap-2 rounded-xl px-5 shadow-sm transition-all hover:scale-[1.02]"
+      onClick={handleScreenshotPdf}
+      disabled={screenshotPdfLoading}
+    >
+      <Download className="h-4 w-4" />
+      {screenshotPdfLoading
+        ? "Generating PDF..."
+        : "Print PDF"}
+    </Button>
+  </div>  )}
+</div>
+        {activeReportTab === "summary" ? (
+          <div ref={reportRef} className="bg-background">
+            {summaryResultId ? (
+              <ReportSummary embedded embeddedResultId={String(summaryResultId)} />
+            ) : (
+              <PageLoader text="Waiting for report summary..." />
+            )}
+          </div>
+        ) : (
+        <>
+        <div ref={reportRef} id="print-report" className="space-y-6 bg-background p-2">
         {/* Patient Header */}
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
@@ -805,46 +903,172 @@ const PatientReport = () => {
         </div>
 
         {/* Key Summary Box */}
-        <div className="rounded-xl border border-primary/20 bg-accent/30 p-6">
-          <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-foreground">
-            <AlertCircle className="h-5 w-5 text-primary" />
-            AI Risk Interpretation
-          </h2>
-          <p className="text-foreground leading-relaxed">{patientInfo?.decline_summary?.band}</p>
-          
-          <div className="mt-4 grid grid-cols-3 gap-4">
-            <div className="rounded-lg bg-card p-4 text-center shadow-sm">
-              <p className="text-sm text-muted-foreground">Risk Percentage</p>
-              <p className={`text-2xl font-bold ${
-                riskPercentage >= 70 ? "text-risk-high" :
-                riskPercentage >= 40 ? "text-risk-moderate" :
-                "text-green-600"
-              }`}>
-                {riskPercentage.toFixed(2)}%
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Patient age: {patientInfo?.patient_info?.age}
-              </p>
-            </div>
-            <div className="rounded-lg bg-card p-4 text-center shadow-sm">
-              <p className="text-sm text-muted-foreground">Abnormal Markers</p>
-              <p className="text-2xl font-bold text-green-600">{abnormalMarkerCount}</p>
-              <p className="text-xs text-muted-foreground">out of {markerItems.length}</p>
-            </div>
-            <div className="rounded-lg bg-card p-4 text-center shadow-sm">
-              <p className="text-sm text-muted-foreground">Risk Category</p>
-              <p className={`text-2xl font-bold ${
-                riskCategory?.toLowerCase().includes('low') ? "text-green-600" :
-                riskCategory?.toLowerCase().includes('moderate') ? "text-risk-moderate" :
-                "text-risk-high"
-              }`}>
-                {riskCategory}
-              </p>
-              <p className="text-xs text-muted-foreground">Classification</p>
-            </div>
-          </div>
+<div className="rounded-2xl border bg-white border-border/50 p-5 shadow-sm">
+  
+  {/* Header */}
+  <div className="mb-5 flex items-start justify-between gap-4">
+    <div>
+      <h2 className="flex items-center gap-2 text-lg font-semibold">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+          <AlertCircle className="h-4 w-4 text-primary" />
+        </div>
+        AI Risk Interpretation
+      </h2>
+
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">
+        {patientInfo?.decline_summary?.band}
+      </p>
+    </div>
+
+    <div
+      className={cn(
+        "rounded-full px-3 py-1 text-xs font-semibold",
+        riskPercentage >= 70
+          ? "bg-red-100 text-red-700"
+          : riskPercentage >= 40
+          ? "bg-yellow-100 text-yellow-700"
+          : "bg-green-100 text-green-700"
+      )}
+    >
+      {riskCategory}
+    </div>
+  </div>
+
+  {/* Compact 4 Cards */}
+  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+
+    {/* Risk Percentage */}
+    <div className="rounded-xl border bg-card p-4 shadow-sm">
+      <p className="text-xs text-muted-foreground">
+        Risk Percentage
+      </p>
+
+      <h3
+        className={cn(
+          "mt-2 text-3xl font-bold",
+          riskPercentage >= 70
+            ? "text-risk-high"
+            : riskPercentage >= 40
+            ? "text-risk-moderate"
+            : "text-green-600"
+        )}
+      >
+        {riskPercentage.toFixed(2)}%
+      </h3>
+
+      <p className="mt-1 text-xs text-muted-foreground">
+        Age: {patientInfo?.patient_info?.age}
+      </p>
+    </div>
+
+    {/* Abnormal Markers */}
+    <div className="rounded-xl border bg-card p-4 shadow-sm">
+      <p className="text-xs text-muted-foreground">
+        Abnormal Markers
+      </p>
+
+      <h3 className="mt-2 text-3xl font-bold text-primary">
+        {abnormalMarkerCount}
+      </h3>
+
+      <p className="mt-1 text-xs text-muted-foreground">
+        out of {markerItems.length}
+      </p>
+    </div>
+
+    {/* Brain Age */}
+    <div
+      className={cn(
+        "rounded-xl border p-4 shadow-sm",
+        patientInfo?.brain_age_analysis?.brain_age_gap > 5
+          ? "border-red-200 bg-red-50"
+          : patientInfo?.brain_age_analysis?.brain_age_gap > 0
+          ? "border-yellow-200 bg-yellow-50"
+          : "border-green-200 bg-green-50"
+      )}
+    >
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs text-muted-foreground">
+            Brain Age
+          </p>
+
+          <h3
+            className={cn(
+              "mt-2 text-3xl font-bold",
+              patientInfo?.brain_age_analysis?.brain_age_gap > 5
+                ? "text-red-600"
+                : patientInfo?.brain_age_analysis?.brain_age_gap > 0
+                ? "text-yellow-600"
+                : "text-green-600"
+            )}
+          >
+            {patientInfo?.brain_age_analysis?.functional_brain_age}
+          </h3>
         </div>
 
+        <div className="text-2xl">🧠</div>
+      </div>
+
+      <div className="mt-3 flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">
+          Gap: {patientInfo?.brain_age_analysis?.brain_age_gap}
+        </span>
+
+        <span
+          className={cn(
+            "font-semibold",
+            patientInfo?.brain_age_analysis?.brain_age_gap > 5
+              ? "text-red-600"
+              : patientInfo?.brain_age_analysis?.brain_age_gap > 0
+              ? "text-yellow-600"
+              : "text-green-600"
+          )}
+        >
+          {patientInfo?.brain_age_analysis?.brain_age_gap > 5
+            ? "High"
+            : patientInfo?.brain_age_analysis?.brain_age_gap > 0
+            ? "Moderate"
+            : "Healthy"}
+        </span>
+      </div>
+    </div>
+
+    {/* Risk Category */}
+    <div className="rounded-xl border bg-card p-4 shadow-sm">
+      <p className="text-xs text-muted-foreground">
+        Risk Category
+      </p>
+
+      <h3
+        className={cn(
+          "mt-2 text-[20px] font-bold",
+          riskCategory?.toLowerCase().includes("low")
+            ? "text-green-600"
+            : riskCategory?.toLowerCase().includes("moderate")
+            ? "text-risk-moderate"
+            : "text-risk-high"
+        )}
+      >
+        {riskCategory}
+      </h3>
+
+      <p className="mt-1 text-xs text-muted-foreground">
+        Classification
+      </p>
+    </div>
+  </div>
+
+  {/* Interpretation */}
+  <div className="mt-4 rounded-xl border bg-muted/30 p-4">
+    <p className="text-sm leading-6 text-muted-foreground">
+      {
+        patientInfo?.brain_age_analysis
+          ?.brain_age_interpretation
+      }
+    </p>
+  </div>
+</div>
         {/* Cognitive Markers Panel */}
         <div className="clinical-card">
           <h2 className="mb-4 text-lg font-semibold text-foreground">Cognitive Markers</h2>
@@ -1036,7 +1260,7 @@ const PatientReport = () => {
               <Activity className="h-5 w-5 text-primary" />
               AI Recommendations
             </h2>
-          {patientInfo.ai_recommendation && (
+          {patientInfo.ai_status === "success" && patientInfo.ai_recommendation && (
             <div className="flex gap-2">
               <Button variant="outline" size="sm" className="gap-1" onClick={handleAiRecommendationView}>
                 <Eye className="h-4 w-4" />
@@ -1048,18 +1272,46 @@ const PatientReport = () => {
               </Button>
             </div>)}
           </div>
-          <ul className="space-y-2">
-              {(() => {
-                const parsedSummary = parseAiSummary(patientInfo.ai_summary);
-                console.log('Final parsed summary for rendering:', parsedSummary);
-                return parsedSummary.map((rec, index) => (
-                  <li key={index} className="flex items-start gap-2 text-muted-foreground">
-                  <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-primary flex-shrink-0" />
-                  {rec}
-                </li>
-                ));
-              })()}
-          </ul>
+          {isAiRecommendationLoading ? (
+            <div className="relative overflow-hidden rounded-xl border border-primary/20 bg-gradient-to-br from-primary/5 via-background to-secondary/10 p-5">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/20 via-primary to-primary/20" />
+              <div className="flex items-start gap-4">
+                <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                  <div className="absolute h-11 w-11 animate-ping rounded-full bg-primary/20" />
+                  <Brain className="relative h-5 w-5 text-primary" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium text-foreground">Generating AI clinical insights</p>
+                    <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                      {patientInfo.ai_status}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Recommendations are being prepared and will appear here automatically.
+                  </p>
+                  <div className="mt-4 space-y-2">
+                    <div className="h-2.5 w-full animate-pulse rounded-full bg-muted" />
+                    <div className="h-2.5 w-5/6 animate-pulse rounded-full bg-muted" />
+                    <div className="h-2.5 w-2/3 animate-pulse rounded-full bg-muted" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <ul className="space-y-2">
+                {(() => {
+                  const parsedSummary = parseAiSummary(patientInfo.ai_summary);
+                  console.log('Final parsed summary for rendering:', parsedSummary);
+                  return parsedSummary.map((rec, index) => (
+                    <li key={index} className="flex items-start gap-2 text-muted-foreground">
+                    <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-primary flex-shrink-0" />
+                    {rec}
+                  </li>
+                  ));
+                })()}
+            </ul>
+          )}
           <p className="mt-4 text-xs text-muted-foreground italic">
             Note: These are suggestions based on AI analysis. Always consult qualified medical professionals for clinical decisions.
           </p>
@@ -1068,10 +1320,10 @@ const PatientReport = () => {
         </div>
         {/* Export Actions */}
         <div className="flex flex-wrap gap-3">
-          <Button className="gap-2" onClick={() => handleScreenshotPdf()} disabled={screenshotPdfLoading}>
+          {/* <Button className="gap-2" onClick={() => handleScreenshotPdf()} disabled={screenshotPdfLoading}>
             <Download className="h-4 w-4" />
             {screenshotPdfLoading ? "Generating PDF..." : "Save Report as PDF"}
-          </Button>
+          </Button> */}
           <Button className="gap-2" onClick={() => handleDownload("csv")} disabled={csvDownloadLoading}>
             <Download className="h-4 w-4" />
             {csvDownloadLoading ? "Downloading..." : "Download CSV for EMR"}
@@ -1166,6 +1418,8 @@ const PatientReport = () => {
             </div>
           </DialogContent>
         </Dialog>
+        </>
+        )}
       </div>
     </MainLayout>
   );

@@ -16,7 +16,7 @@ export async function uploadEEG(file: File) {
 
 // Analyze EEG
 export async function analyzeEEG(eegId: string) {
-  const res = await fetchWithAuth(`${API_BASE_URL}/eeg/process/${eegId}`, {
+  const res = await fetchWithAuth(`${API_BASE_URL}/eeg/process/${encodeURIComponent(eegId)}`, {
     method: "POST",
   });
   return res.json();

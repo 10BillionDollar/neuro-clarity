@@ -27,8 +27,9 @@ import {
 } from "recharts";
 
 const Longitudinal = () => {
-  const { patientId } = useParams();
+  const { patientId: patientIdParam } = useParams();
   const navigate = useNavigate();
+  const patientId = patientIdParam ? decodeURIComponent(patientIdParam) : undefined;
   const [allPatients, setAllPatients] = useState<any[]>([]);
   const [selectedPatient, setSelectedPatient] = useState('');
 
@@ -48,7 +49,7 @@ const Longitudinal = () => {
 
   const handlePatientChange = (patientCode: string) => {
     setSelectedPatient(patientCode);
-    navigate(`/longitudinal/${patientCode}`);
+    navigate(`/longitudinal/${encodeURIComponent(patientCode)}`);
   };
   const [patientData, setPatientData] = useState(null);
   const [loading, setLoading] = useState(true);

@@ -3,11 +3,13 @@ import { useEffect, useState } from "react";
 import { fetchWithAuth } from "@/lib/fetchWithAuth";
 
 export default function ReportPage() {
-  const { patientId } = useParams();
+  const { patientId: patientIdParam } = useParams();
+  const patientId = patientIdParam ? decodeURIComponent(patientIdParam) : undefined;
   const [report, setReport] = useState(null);
 
   useEffect(() => {
-    fetchWithAuth(`http://34.135.191.239:8000/auth/report/${patientId}`)
+    if (!patientId) return;
+    fetchWithAuth(`http://34.135.191.239:8000/auth/report/${encodeURIComponent(patientId)}`)
       .then(res => res.json())
       .then(data => setReport(data))
       .catch(err => console.error(err));

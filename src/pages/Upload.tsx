@@ -271,7 +271,7 @@ const Upload = () => {
       setUploadedFileId(jobId);
 
       // Save patient info (POST) using the job_id
-      const savePatientResponse = await fetchWithAuth(`${API_BASE_URL}/patient-info/${jobId}`, {
+      const savePatientResponse = await fetchWithAuth(`${API_BASE_URL}/patient-info/${encodeURIComponent(String(jobId))}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -326,7 +326,7 @@ const Upload = () => {
 
     try {
       // Fetch quality check results
-      const qualityResponse = await fetchWithAuth(`${API_BASE_URL}/quality-check/${uploadedFileId}`, {
+      const qualityResponse = await fetchWithAuth(`${API_BASE_URL}/quality-check/${encodeURIComponent(String(uploadedFileId))}`, {
         method: 'GET',
       });
 
@@ -374,7 +374,7 @@ const Upload = () => {
     });
 
     // Redirect immediately using the known jobId
-    navigate(`/report/${uploadedFileId}`);
+    navigate(`/report/${encodeURIComponent(String(uploadedFileId))}`);
   };
 
   const steps = [
