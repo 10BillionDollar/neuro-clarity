@@ -38,6 +38,7 @@ import { downloadPrescription, getFileExtension } from "@/app/reports";
 import ReportSummary from "./ReportSummary";
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import EEGScanReport from "@/components/eegscanReport";
 import {
   LineChart,
   Line,
@@ -51,7 +52,6 @@ import {
   Cell,
 } from "recharts";
 
-// Mock patient datakaise
 const initialPatientData = {
   id: "",
   name: "",
@@ -196,7 +196,7 @@ const PatientReport = () => {
   const POLL_INTERVAL_MS = 5000;
 
   const [patientData, setPatientData] = useState(initialPatientData);
-  const [cognitiveMarkers, setCognitiveMarkers] = useState(initialCognitiveMarkers);
+  const [cognitiveMarkers, setCognitiveMarkers] = useState<any>(initialCognitiveMarkers);
   const [brainAgeData, setBrainAgeData] = useState(initialBrainAgeData);
   const [riskTrendData, setRiskTrendData] = useState(initialRiskTrendData);
   const [graphData, setGraphData] = useState(null);
@@ -300,11 +300,6 @@ const PatientReport = () => {
         if (graphsRes.ok) {
           const graphDataResponse = await graphsRes.json();
           setGraphData(graphDataResponse);
-        }
-
-        if (!cancelled && hasReportData && !isAiSuccess && !fromPatientHistory) {
-          timeoutId = setTimeout(loadCardAndGraphData, POLL_INTERVAL_MS);
-          return;
         }
 
         if (!cancelled) {

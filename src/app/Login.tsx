@@ -1,23 +1,26 @@
   import React, { useState, useEffect } from "react";
-import { login, LoginPayload } from "./auth";
+import { login, LoginPayload, getHospitals, Hospital } from "./auth";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "./AuthContext";
 import { AuthLayout } from "@/components/layout/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Eye, EyeOff, Headphones } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function Login() {
-  const [username, setUsername] = useState("");
+  const [hospitalName, setHospitalName] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [headsetEnabled, setHeadsetEnabled] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [hospitals, setHospitals] = useState<Hospital[]>([]);
+  const [hospitalLoadError, setHospitalLoadError] = useState("");
+  const [loadingHospitals, setLoadingHospitals] = useState(true);
   const navigate = useNavigate();
   const { login: authLogin, isAuthenticated } = useAuth();
 
@@ -28,27 +31,47 @@ export default function Login() {
     }
   }, [isAuthenticated, navigate]);
 
+  useEffect(() => {
+    const loadHospitals = async () => {
+      try {
+        const data = await getHospitals();
+        setHospitals(Array.isArray(data.hospitals) ? data.hospitals : []);
+        if (!Array.isArray(data.hospitals) || data.hospitals.length === 0) {
+          setHospitalLoadError("No hospitals available. Please contact your administrator.");
+        }
+      } catch (err: any) {
+        setHospitalLoadError("Unable to load hospital list. Please refresh the page.");
+      } finally {
+        setLoadingHospitals(false);
+      }
+    };
+
+    loadHospitals();
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       setError("");
+      if (!hospitalName) {
+        setError("Please select a hospital from the dropdown.");
+        return;
+      }
       setIsLoading(true);
 
-      // For now, using username as email for the API
-      const payload: LoginPayload = { email: username, password };
+      const payload: LoginPayload = { hospital_name: hospitalName, email, password };
       try {
         const res = await login(payload);
         if (res.access_token) {
-          // Pass user data from login API response to AuthContext
           const userData = {
             email: res.email,
             name: res.name,
             hospital_name: res.hospital_name,
-            ...res.user // Include any additional user data
+            ...res.user,
           };
           authLogin(res.access_token, userData);
           navigate("/");
         } else {
-          setError(res.detail || "Login failed");
+          setError(res.detail || res.error || "Login failed");
         }
       } catch (err: any) {
         setError(err.message || "Login failed");
@@ -68,24 +91,52 @@ export default function Login() {
             {error}
           </div>
         )}
+        {hospitalLoadError && (
+          <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded-md">
+            {hospitalLoadError}
+          </div>
+        )}
         
-        {/* Username Fields */}
         <div className="space-y-4">
           <div>
-            <Label htmlFor="username1">Username</Label>
+            <Label htmlFor="hospital">Hospital</Label>
+            <Select
+              value={hospitalName}
+              onValueChange={(value) => setHospitalName(value)}
+              disabled={loadingHospitals || hospitals.length === 0}
+            >
+              <SelectTrigger id="hospital" className="w-full">
+                <SelectValue placeholder={loadingHospitals ? "Loading hospitals..." : "Select a hospital"} />
+              </SelectTrigger>
+              <SelectContent>
+                {hospitals.length > 0 ? (
+                  hospitals.map((hospital) => (
+                    <SelectItem key={hospital.hospital_id} value={hospital.hospital_name}>
+                      {hospital.hospital_name}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value="no-hospitals" disabled>
+                    No hospitals available
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="email">Email</Label>
             <Input
-              id="username"
-              type="text"
-              placeholder="Enter your username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              id="email"
+              type="email"
+              placeholder="Enter your email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               disabled={isLoading}
               required
             />
           </div>
-          
-          
-          
+
           <div>
             <Label htmlFor="password">Password</Label>
             <div className="relative">

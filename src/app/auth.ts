@@ -1,14 +1,30 @@
 import { API_BASE_URL } from "./config";
 
 export interface SignupPayload {
-  name: string;
+  hospital_name: string;
+  email: string;
+  password: string;
+  invite_key: string;
+}
+
+export interface LoginPayload {
+  hospital_name: string;
   email: string;
   password: string;
 }
 
-export interface LoginPayload {
-  email: string;
-  password: string;
+export interface Hospital {
+  hospital_id: string;
+  hospital_name: string;
+}
+
+export interface HospitalListResponse {
+  hospitals: Hospital[];
+}
+
+export async function getHospitals(): Promise<HospitalListResponse> {
+  const res = await fetch(`${API_BASE_URL}/hospitals`);
+  return res.json();
 }
 
 export async function signup(payload: SignupPayload) {

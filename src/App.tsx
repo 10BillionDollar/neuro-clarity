@@ -7,6 +7,7 @@ import { AuthProvider } from "./app/AuthContext";
 import ProtectedRoute from "./app/ProtectedRoute";
 import Index from "./pages/Index";
 import Upload from "./pages/Upload";
+import EegAnalysis from "./pages/EegAnalysis";
 import PatientReport from "./pages/PatientReport";
 import Reports from "./pages/Reports";
 import Longitudinal from "./pages/Longitudinal";
@@ -17,8 +18,8 @@ import Login from "./app/Login";
 import Signup from "./app/Signup";
 import Patients from "./pages/Patients";
 import PatientHistory from "./pages/PatientHistory";
-import CognitiveAssessment from "./pages/Cognitive_Assessment";
 import ReportSummary from "./pages/ReportSummary";
+import EEGScanReport from "./components/eegscanReport";
 
 const queryClient = new QueryClient();
 
@@ -49,10 +50,26 @@ const App = () => (
               }
             />
             <Route
+              path="/eeg-analysis/:resultId?"
+              element={
+                <ProtectedRoute>
+                  <EegAnalysis />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/report/:jobId"
               element={
                 <ProtectedRoute>
                   <PatientReport />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/report-eeg/:jobId"
+              element={
+                <ProtectedRoute>
+                  <EEGScanReport />
                 </ProtectedRoute>
               }
             />
@@ -121,6 +138,7 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

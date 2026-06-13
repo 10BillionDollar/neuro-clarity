@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fetchWithAuth } from "@/lib/fetchWithAuth";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
 import { API_BASE_URL } from "@/app/config";
 import { getPatientsDb, createPatient, PatientPayload } from "@/app/patients";
@@ -51,12 +51,29 @@ interface Patient {
 interface QualityResult {
   overallScore: number;
   badChannels: string[];
-  muscleArtifacts: "Low" | "Moderate" | "High";
-  eyeBlinkContamination: "Low" | "Moderate" | "High";
+  muscleArtifacts: string;
+  eyeBlinkContamination: string;
+  lineNoise?: string;
+  movementArtifacts?: string;
+  badChannelNames?: string[];
+  flatChannelNames?: string[];
+  lowCorrelationChannelNames?: string[];
+  dropoutChannelNames?: string[];
+  penalties?: string[];
+  selectedChannelCount?: number;
+  missingChannelCount?: number;
+  analysisType?: string;
+  importantNote?: string;
+  qualityLabel?: string;
+  recommendations?: string[];
+  sleepStageIndicators?: Record<string, boolean>;
+  qualityScore0to100?: number;
+  findings?: string[];
 }
 
 const Upload = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [currentStep, setCurrentStep] = useState<Step>(1);
   const [patients, setPatients] = useState<Patient[]>([]);  
   const [selectedPatientCode, setSelectedPatientCode] = useState<string>("");
@@ -70,6 +87,7 @@ const Upload = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedFileId, setUploadedFileId] = useState<string | null>(null);
   const [isAddPatientModalOpen, setIsAddPatientModalOpen] = useState(false);
+  const [resultid, setResultid] = useState<string | null>(null);
   
   const [patientInfo, setPatientInfo] = useState({
     name: "",
@@ -332,13 +350,82 @@ const Upload = () => {
 
       if (qualityResponse.ok) {
         const qualityData = await qualityResponse.json();
+
+        // Normalize combined_analysis: it may arrive as an object or as a JSON string
+        const combinedAnalysisRaw = qualityData.sleep_markers?.combined_analysis ?? qualityData.combined_analysis;
+        let combinedAnalysis: any = null;
+        if (combinedAnalysisRaw) {
+          if (typeof combinedAnalysisRaw === "string") {
+            try {
+              combinedAnalysis = JSON.parse(combinedAnalysisRaw);
+            } catch {
+              combinedAnalysis = null;
+            }
+          } else if (typeof combinedAnalysisRaw === "object") {
+            combinedAnalysis = combinedAnalysisRaw;
+          }
+        }
+
+        const penalties = Array.isArray(qualityData?.quality_details?.penalties)
+          ? qualityData.quality_details.penalties.map((item: any) =>
+              typeof item === "object" && item !== null ? JSON.stringify(item) : String(item)
+            )
+          : qualityData.quality_details?.penalties
+          ? [String(qualityData.quality_details.penalties)]
+          : [];
+
+        const findings = Array.isArray(qualityData.findings)
+          ? qualityData.findings.map((item: any) =>
+              typeof item === "object" && item !== null ? JSON.stringify(item) : String(item)
+            )
+          : Array.isArray(combinedAnalysis?.findings)
+          ? combinedAnalysis.findings.map((item: any) =>
+              typeof item === "object" && item !== null ? JSON.stringify(item) : String(item)
+            )
+          : qualityData.findings
+          ? [String(qualityData.findings)]
+          : [];
+
+        const sleepStageIndicators =
+          qualityData.sleep_stage_indicators ||
+          qualityData.sleep_markers?.sleep_stage_indicators ||
+          combinedAnalysis?.sleep_stage_indicators;
+
+        const recommendations = Array.isArray(qualityData.recommendations)
+          ? qualityData.recommendations.map((item: any) =>
+              typeof item === "object" && item !== null ? JSON.stringify(item) : String(item)
+            )
+          : Array.isArray(combinedAnalysis?.recommendations)
+          ? combinedAnalysis.recommendations.map((item: any) =>
+              typeof item === "object" && item !== null ? JSON.stringify(item) : String(item)
+            )
+          : qualityData.recommendations
+          ? [String(qualityData.recommendations)]
+          : [];
+
         setQualityResult({
-          overallScore: qualityData.overall_quality || 0,
+          overallScore: qualityData.overall_quality || qualityData.quality_score_0_100 || 0,
           badChannels: qualityData.bad_channels || [],
           muscleArtifacts: qualityData.muscle_artifacts || "Low",
           eyeBlinkContamination: qualityData.eye_blinks || "Low",
+          lineNoise: qualityData.line_noise || "Unknown",
+          movementArtifacts: qualityData.movement_artifacts || "Unknown",
+          badChannelNames: qualityData.bad_channel_names || [],
+          flatChannelNames: qualityData.flat_channel_names || [],
+          lowCorrelationChannelNames: qualityData.low_correlation_channel_names || [],
+          dropoutChannelNames: qualityData.dropout_channel_names || [],
+          penalties,
+          selectedChannelCount: qualityData.selected_channel_count,
+          missingChannelCount: qualityData.missing_channel_count,
+          analysisType: qualityData.analysis_type || qualityData.sleep_markers?.analysis_type || combinedAnalysis?.analysis_type,
+          importantNote: qualityData.important_note || qualityData.sleep_markers?.important_note || combinedAnalysis?.important_note,
+          qualityLabel: qualityData.quality_label || qualityData.sleep_markers?.quality_label || combinedAnalysis?.quality_label,
+          recommendations,
+          sleepStageIndicators,
+          qualityScore0to100: qualityData.quality_score_0_100 ?? combinedAnalysis?.quality_score_0_100,
+          findings,
         });
-
+setResultid(qualityData.result_id);
         toast({
           title: "Quality Check Complete",
           description: "Analysis completed successfully.",
@@ -373,8 +460,31 @@ const Upload = () => {
       description: "Processing complete. Redirecting to patient report...",
     });
 
+    const fromEegAnalysis = location.pathname.includes("/eeg-analysis");
+
     // Redirect immediately using the known jobId
-    navigate(`/report/${encodeURIComponent(String(uploadedFileId))}`);
+    if(fromEegAnalysis){
+      navigate(
+        `/report-eeg/${encodeURIComponent(String(resultid))}`,
+        {
+          state: {
+            fromEegAnalysis,
+            reportId: encodeURIComponent(String(uploadedFileId)),
+          },
+        }
+      );
+
+    }else{
+    navigate(
+      `/report/${encodeURIComponent(String(uploadedFileId))}`,
+      {
+        state: {
+          fromEegAnalysis,
+          reportId: encodeURIComponent(String(uploadedFileId)),
+        },
+      }
+    );
+  }
   };
 
   const steps = [
@@ -748,10 +858,6 @@ const Upload = () => {
                           <p className="text-sm text-green-800">EEG analysis is complete and results are ready.</p>
                         </div>
                       </div>
-                      {/* <div className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-foreground shadow-sm">
-                        <span>Patient: </span>
-                        <span className="text-primary">{patientInfo.name || patientInfo.id}</span>
-                      </div> */}
                     </div>
                   </div>
 
@@ -775,34 +881,167 @@ const Upload = () => {
                       </p>
                     </div>
 
-                    {/* <div className="rounded-2xl border border-border bg-card p-5">
-                      <p className="text-sm font-medium text-muted-foreground">Bad Channels</p>
-                      <p className="mt-3 text-3xl font-semibold text-foreground">{qualityResult.badChannels?.length || 0}</p>
-                      <p className="mt-2 text-sm text-muted-foreground">Channels flagged for review</p>
-                    </div> */}
+                    <div className="rounded-2xl border border-border bg-card p-5">
+                      <p className="text-sm font-medium text-muted-foreground">Artifact Summary</p>
+                      <div className="mt-4 space-y-3 text-sm text-foreground">
+                        <div className="flex items-center justify-between gap-3">
+                          <span>Eye Blinks</span>
+                          <span className="font-semibold">{qualityResult.eyeBlinkContamination || 'Unknown'}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span>Line Noise</span>
+                          <span className="font-semibold">{qualityResult.lineNoise || 'Unknown'}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span>Movement Artifacts</span>
+                          <span className="font-semibold">{qualityResult.movementArtifacts || 'Unknown'}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span>Muscle Artifacts</span>
+                          <span className="font-semibold">{qualityResult.muscleArtifacts || 'Unknown'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-border bg-card p-5">
+                      <p className="text-sm font-medium text-muted-foreground">Channel Health</p>
+                      <div className="mt-4 space-y-3 text-sm text-foreground">
+                        <div className="flex items-center justify-between gap-3">
+                          <span>Bad Channels</span>
+                          <span className="font-semibold">{qualityResult.badChannels?.length || qualityResult.badChannelNames?.length || 0}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span>Selected Channels</span>
+                          <span className="font-semibold">{qualityResult.selectedChannelCount ?? '—'}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span>Missing Channels</span>
+                          <span className="font-semibold">{qualityResult.missingChannelCount ?? '—'}</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-
-                  {/* <div className="grid gap-4 md:grid-cols-2">
-                    <div className="rounded-2xl border border-border bg-card p-5">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-medium text-muted-foreground">Muscle Artifacts</p>
-                        <Badge variant={qualityResult.muscleArtifacts === 'Low' ? 'default' : 'destructive'}>
-                          {qualityResult.muscleArtifacts || 'Unknown'}
-                        </Badge>
-                      </div>
-                      <p className="mt-3 text-sm text-muted-foreground">Movement-related noise in the recording.</p>
+                   <div className="rounded-2xl border border-border bg-card p-5">
+                      <p className="text-sm font-medium text-muted-foreground">Quality Breakdown</p>
+                      {qualityResult.penalties?.length ? (
+                        <ul className="mt-4 space-y-2 text-sm text-foreground list-disc list-inside">
+                          {qualityResult.penalties.map((penalty, index) => (
+                            <li key={index}>{penalty}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="mt-4 text-sm text-muted-foreground">No penalties detected.</p>
+                      )}
                     </div>
 
+
+                  <div className="grid gap-4 md:grid-cols-1">
+                   
                     <div className="rounded-2xl border border-border bg-card p-5">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-medium text-muted-foreground">Eye Blink Contamination</p>
-                        <Badge variant={qualityResult.eyeBlinkContamination === 'Low' ? 'default' : 'destructive'}>
-                          {qualityResult.eyeBlinkContamination || 'Unknown'}
-                        </Badge>
+                      <p className="text-sm font-medium text-muted-foreground">Sleep Marker Quality</p>
+                      <div className="mt-4  grid-cols-3 grid gap-[15px] text-sm text-foreground">
+                        {qualityResult.analysisType && (
+                          <div className="rounded-2xl col-span bg-muted p-3">
+                            <p className="font-semibold">Analysis type</p>
+                            <p className="mt-2">{qualityResult.analysisType.replace(/_/g, ' ')}</p>
+                          </div>
+                        )}
+
+                        {qualityResult.qualityLabel && (
+                          <div className="rounded-2xl col-span bg-muted p-3">
+                            <p className="font-semibold">Quality label</p>
+                            <p className="mt-2">{qualityResult.qualityLabel.replace(/_/g, ' ')}</p>
+                          </div>
+                        )}
+
+                        {qualityResult.importantNote && (
+                          <div className="rounded-2xl col-span bg-muted p-3">
+                            <p className="font-semibold">Important note</p>
+                            <p className="mt-2 text-muted-foreground">{qualityResult.importantNote}</p>
+                          </div>
+                        )}
+
+                        {qualityResult.findings?.length ? (
+                          <div className="rounded-2xl bg-muted p-3">
+                            <p className="font-semibold">Findings</p>
+                            <ul className="mt-3 list-disc list-inside space-y-2 text-sm text-foreground">
+                              {qualityResult.findings.map((finding, index) => (
+                                <li key={index}>{finding}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+
+                        {qualityResult.sleepStageIndicators && (
+                          <div className="rounded-2xl bg-muted p-3">
+                            <p className="font-semibold">Sleep stage indicators</p>
+                            <div className="mt-3 grid gap-1 sm:grid-cols-1">
+                              {Object.entries(qualityResult.sleepStageIndicators).map(([key, value]) => (
+                                <div className="flex items-center justify-between rounded-xl bg-background p-3" key={key}>
+                                  <span>{key.replace(/_/g, ' ')}</span>
+                                  <span className="font-semibold">{value ? 'Yes' : 'No'}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {qualityResult.recommendations?.length ? (
+                          <div className="rounded-2xl bg-muted p-3">
+                            <p className="font-semibold">Recommendations</p>
+                            <ul className="mt-3 list-disc list-inside space-y-2 text-sm text-foreground">
+                              {qualityResult.recommendations.map((recommendation, index) => (
+                                <li key={index}>{recommendation}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : (
+                          <div className="rounded-2xl bg-muted p-3">
+                            <p className="text-sm text-muted-foreground">No recommendations available.</p>
+                          </div>
+                        )}
+
+                        {qualityResult.qualityScore0to100 != null && (
+                          <div className="rounded-2xl bg-muted p-3 text-sm text-foreground">
+                            <p className="font-semibold">Sleep Marker Score</p>
+                            <p className="mt-2 font-semibold">{qualityResult.qualityScore0to100}%</p>
+                          </div>
+                        )}
                       </div>
-                      <p className="mt-3 text-sm text-muted-foreground">Eye blink activity present in the EEG.</p>
                     </div>
-                  </div> */}
+                  </div>
+{/* 
+                  {(qualityResult.badChannelNames?.length || qualityResult.flatChannelNames?.length || qualityResult.lowCorrelationChannelNames?.length || qualityResult.dropoutChannelNames?.length) && (
+                    <div className="rounded-2xl border border-border bg-card p-5">
+                      <p className="text-sm font-medium text-muted-foreground">Channel Lists</p>
+                      <div className="mt-4 space-y-3 text-sm text-foreground">
+                        {qualityResult.badChannelNames?.length ? (
+                          <div>
+                            <p className="font-semibold">Bad channels</p>
+                            <p className="text-muted-foreground">{qualityResult.badChannelNames.join(', ')}</p>
+                          </div>
+                        ) : null}
+                        {qualityResult.flatChannelNames?.length ? (
+                          <div>
+                            <p className="font-semibold">Flat channels</p>
+                            <p className="text-muted-foreground">{qualityResult.flatChannelNames.join(', ')}</p>
+                          </div>
+                        ) : null}
+                        {qualityResult.lowCorrelationChannelNames?.length ? (
+                          <div>
+                            <p className="font-semibold">Low correlation channels</p>
+                            <p className="text-muted-foreground">{qualityResult.lowCorrelationChannelNames.join(', ')}</p>
+                          </div>
+                        ) : null}
+                        {qualityResult.dropoutChannelNames?.length ? (
+                          <div>
+                            <p className="font-semibold">Dropout channels</p>
+                            <p className="text-muted-foreground">{qualityResult.dropoutChannelNames.join(', ')}</p>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  )} */}
 
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <Button variant="outline" onClick={() => setCurrentStep(2)}>
