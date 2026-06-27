@@ -20,6 +20,7 @@ import Patients from "./pages/Patients";
 import PatientHistory from "./pages/PatientHistory";
 import ReportSummary from "./pages/ReportSummary";
 import EEGScanReport from "./components/eegscanReport";
+import EegTechnicianReport from "./pages/EegTechnicianReport";
 
 const queryClient = new QueryClient();
 
@@ -70,6 +71,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <EEGScanReport />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/eeg-technician-report"
+              element={
+                <ProtectedRoute>
+                  <EegTechnicianReport />
                 </ProtectedRoute>
               }
             />

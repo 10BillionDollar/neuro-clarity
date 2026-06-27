@@ -40,7 +40,7 @@ import { getPatientById, getPatientHistory } from "@/app/patients";
 import { getRiskBadgeVariantFromPercentage, getRiskLevelFromPercentage, getRiskLevelText } from "@/lib/riskUtils";
 import { API_BASE_URL } from "@/app/config";
 import { downloadPrescription, getPrescriptionData, getFileExtension } from "@/app/reports";
-import { ArrowLeft, Clock, ChevronDown, ChevronRight, TrendingUp, Activity, Brain, Eye, TrendingDown, Minus, Download, FileText, Loader2 } from "lucide-react";
+import { ArrowLeft, Clock, ChevronDown, ChevronRight, TrendingUp, Activity, Brain, Eye, TrendingDown, Minus, Download, FileText, Loader2, Bot } from "lucide-react";
 
 interface HistoryEntry {
   id?: number | string;
@@ -146,11 +146,17 @@ export default function PatientHistory() {
   );
 };
 
-const toggleRowExpansion = (rowId: string | number) => {
-  //  console.log(rowId,"rowId")
+const toggleRowExpansion = (rowId: string | number,via) => {
+   console.log(toggleRowExpansion,"toggleRowExpansion")
+   if(via!=="analysis"){
   navigate(`/report/${encodeURIComponent(String(rowId))}`, { state: { patientCode: patient_code, reportId: encodeURIComponent(String(rowId)), fromPatientHistory: true } });
-  };
+  }else{
+      navigate(`/report-eeg/${encodeURIComponent(String(rowId))}`, { state: { patientCode: patient_code, reportId: encodeURIComponent(String(rowId)), fromPatientHistory: true } });
 
+    
+  }
+
+}
 const handleDownload = async (entry: HistoryEntry) => {
   // Use the result ID for the API call
   const resultId = entry.result_id;
@@ -719,11 +725,23 @@ const getRiskBadgeVariant = (level: any) => {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => toggleRowExpansion(entry.result_id)}
+                                onClick={() => toggleRowExpansion(entry.result_id,"report")}
                                 className="h-9 w-9 p-0"
-                                title="View Details"
+                                title="Open Cognitive Screening Report"
                               >
-                                {<ChevronRight className="h-4 w-4" />}
+                                <Bot className="h-4 w-4" />
+                              </Button>
+
+                                <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => toggleRowExpansion(entry.result_id,
+                                "analysis"
+                                )}
+                                className="h-9 w-9 p-0"
+                                title="Open EEG Analysis Record"
+                              >
+                                <Activity className="h-4 w-4" />
                               </Button>
                               {/* <Button
                                 variant="ghost"

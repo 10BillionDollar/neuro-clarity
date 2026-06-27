@@ -402,15 +402,16 @@ const Upload = () => {
           : qualityData.recommendations
           ? [String(qualityData.recommendations)]
           : [];
+          console.log("Quality Data:", qualityData);
 
         setQualityResult({
-          overallScore: qualityData.overall_quality || qualityData.quality_score_0_100 || 0,
-          badChannels: qualityData.bad_channels || [],
-          muscleArtifacts: qualityData.muscle_artifacts || "Low",
-          eyeBlinkContamination: qualityData.eye_blinks || "Low",
-          lineNoise: qualityData.line_noise || "Unknown",
-          movementArtifacts: qualityData.movement_artifacts || "Unknown",
-          badChannelNames: qualityData.bad_channel_names || [],
+          overallScore: qualityData.pipeline_quality.overall_quality || qualityData.quality_score_0_100 || 0,
+          badChannels: qualityData.pipeline_quality.bad_channels || [],
+          muscleArtifacts: qualityData.pipeline_quality.muscle_artifacts || "Low",
+          eyeBlinkContamination: qualityData.pipeline_quality.eye_blinks || "Low",
+          lineNoise: qualityData.pipeline_quality.line_noise || "Unknown",
+          movementArtifacts: qualityData.pipeline_quality.movement_artifacts || "Unknown",
+          badChannelNames: qualityData.pipeline_quality.bad_channel_names || [],
           flatChannelNames: qualityData.flat_channel_names || [],
           lowCorrelationChannelNames: qualityData.low_correlation_channel_names || [],
           dropoutChannelNames: qualityData.dropout_channel_names || [],

@@ -22,8 +22,9 @@ const navigation = [
     href: "#",
     icon: Upload,
     subTabs: [
-      { name: "New Screening", href: "/upload", icon: Upload },
+      { name: "Cognitive Screening", href: "/upload", icon: Upload },
       { name: "EEG Signal Analysis", href: "/eeg-analysis", icon: FileText },
+      { name: "Technician Report", href: "/eeg-technician-report", icon: FileText },
     ],
   },
   { name: "Longitudinal", href: "/longitudinal", icon: TrendingUp },

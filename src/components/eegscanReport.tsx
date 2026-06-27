@@ -17,7 +17,7 @@ const LINE_COLORS = [
 ];
 
 export default function EegAnalysis() {
-  const [selectedTab, setSelectedTab] = useState<"raw" | "montage">("raw");
+  const [selectedTab, setSelectedTab] = useState<"raw" | "montage">("montage");
   const { jobId } = useParams<{ jobId?: string }>();
   const [windowDuration, setWindowDuration] = useState<number>(1);
   const [windowStart, setWindowStart] = useState<number>(0);
@@ -196,8 +196,9 @@ export default function EegAnalysis() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <Tabs value={selectedTab} onValueChange={(value) => setSelectedTab(value as "raw" | "montage")}>
                 <TabsList className="grid w-full max-w-md grid-cols-2">
+                                    <TabsTrigger value="montage">Bipolar Montage</TabsTrigger>
+
                   <TabsTrigger value="raw">Raw Channels</TabsTrigger>
-                  <TabsTrigger value="montage">Clinical Montage</TabsTrigger>
                 </TabsList>
               </Tabs>
 
