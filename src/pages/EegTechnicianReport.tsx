@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,18 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { generateNIMHANSPDF } from "@/components/generateDrPdf";
+// Add these imports at the top
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -20,15 +32,24 @@ import {
   CheckCircle2,
   FileText,
   Printer,
+  Plus,
   UploadCloud,
   UserRound,
   Waves,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { processEEG } from "@/app/eeg";
+import { createPatient, getPatientsDb, type PatientPayload } from "@/app/patients";
 import { toast } from "@/hooks/use-toast";
 
 type StepId = 1 | 2 | 3 | 4 | 5 | 6;
+
+interface PatientOption {
+  patient_code: string;
+  name: string;
+  age: number;
+  gender: string;
+}
 
 type ReportData = {
   file: File | null;
@@ -119,6 +140,15 @@ const correlateOptions = [
 export default function EegTechnicianReport() {
   const [currentStep, setCurrentStep] = useState<StepId>(1);
   const [background, setBackground] = useState("normal");
+  const [patients, setPatients] = useState<PatientOption[]>([]);
+  const [selectedPatientCode, setSelectedPatientCode] = useState("");
+  const [isAddPatientModalOpen, setIsAddPatientModalOpen] = useState(false);
+  const [newPatient, setNewPatient] = useState({
+    name: "",
+    age: "",
+    gender: "",
+    patient_code: "",
+  });
   const [report, setReport] = useState<ReportData>({
     file: null,
     patientName: "",
@@ -152,6 +182,20 @@ export default function EegTechnicianReport() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  useEffect(() => {
+    const fetchPatients = async () => {
+      try {
+        const data = await getPatientsDb();
+        const list = Array.isArray(data) ? data : data.patients ?? [];
+        setPatients(list);
+      } catch (error) {
+        console.error("Error fetching patients:", error);
+      }
+    };
+
+    fetchPatients();
+  }, []);
+
   const previewLines = useMemo(() => {
     const parts = [
       `Patient: ${report.patientName || "—"}`,
@@ -174,6 +218,73 @@ export default function EegTechnicianReport() {
     setSubmitError(null);
   };
 
+  const handlePatientSelect = (value: string) => {
+    if (value === "add-new") {
+      setIsAddPatientModalOpen(true);
+      return;
+    }
+
+    setSelectedPatientCode(value);
+    const patient = patients.find((item) => item.patient_code === value);
+    if (patient) {
+      setReport((prev) => ({
+        ...prev,
+        patientName: patient.name,
+        age: String(patient.age),
+        pid:patient.patient_code,
+        gender: patient.gender,
+      }));
+    }
+  };
+
+  const handleAddPatient = async () => {
+    if (!newPatient.name || !newPatient.age || !newPatient.gender || !newPatient.patient_code) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required patient fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const payload: PatientPayload = {
+        hospital_id: 1,
+        patient_code: newPatient.patient_code,
+        name: newPatient.name,
+        age: Number(newPatient.age),
+        gender: newPatient.gender,
+      };
+
+      await createPatient(payload);
+
+      const data = await getPatientsDb();
+      const list = Array.isArray(data) ? data : data.patients ?? [];
+      setPatients(list);
+      setSelectedPatientCode(newPatient.patient_code);
+      setReport((prev) => ({
+        ...prev,
+        patientName: newPatient.name,
+        age: newPatient.age,
+        gender: newPatient.gender,
+      }));
+      setIsAddPatientModalOpen(false);
+      setNewPatient({ name: "", age: "", gender: "", patient_code: "" });
+
+      toast({
+        title: "Patient Added",
+        description: "The patient has been added successfully.",
+      });
+    } catch (error) {
+      console.error("Error adding patient:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add patient. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const getSexValue = (gender: string) => {
     if (gender === "M") return "Male";
     if (gender === "F") return "Female";
@@ -181,18 +292,19 @@ export default function EegTechnicianReport() {
   };
 
   const handleSubmitReport = async () => {
+    console.log(report)
     if (!report.file) {
       setSubmitError("Please upload an EDF file before submitting.");
       toast({ title: "Submit failed", description: "No EEG file selected.", variant: "destructive" });
       return;
     }
 
-    const pid = report.neuroNo || report.uhid;
-    if (!pid) {
-      setSubmitError("Patient ID is required for final submission.");
-      toast({ title: "Submit failed", description: "Enter Neuro No. or UHID before submitting.", variant: "destructive" });
-      return;
-    }
+    // const pid = report.neuroNo || report.uhid;
+    // if (!pid) {
+    //   setSubmitError("Patient ID is required for final submission.");
+    //   toast({ title: "Submit failed", description: "Enter Neuro No. or UHID before submitting.", variant: "destructive" });
+    //   return;
+    // }
 
     if (!report.patientName) {
       setSubmitError("Patient name is required for final submission.");
@@ -202,12 +314,11 @@ export default function EegTechnicianReport() {
 
     setSubmitError(null);
     setIsSubmitting(true);
-
     try {
-      await processEEG({
+   let processed=   await processEEG({
         file: report.file,
-        pid,
         name: report.patientName,
+        pid:report.pid,
         age: report.age,
         sex: getSexValue(report.gender),
         sensorium: report.sensorium,
@@ -238,6 +349,7 @@ export default function EegTechnicianReport() {
       });
 
       toast({ title: "Report submitted", description: "EEG report has been submitted successfully." });
+      generateNIMHANSPDF(report, processed);
     } catch (error) {
       console.error("processEEG error", error);
       setSubmitError("Submission failed. Please try again.");
@@ -327,6 +439,35 @@ export default function EegTechnicianReport() {
         return (
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-4">
+              <div className="md:col-span-2 space-y-2">
+                <Label htmlFor="patientSelect">Patient</Label>
+                <Select value={selectedPatientCode} onValueChange={handlePatientSelect}>
+                  <SelectTrigger id="patientSelect">
+                    <SelectValue placeholder="Select or add a patient" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem
+                      value="add-new"
+                      className="rounded-xl px-3 py-3"
+                      onPointerDown={(event) => {
+                        event.preventDefault();
+                        setIsAddPatientModalOpen(true);
+                      }}
+                    >
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <Plus className="h-4 w-4" />
+                        Add New Patient
+                      </div>
+                    </SelectItem>
+                    {patients.map((patient) => (
+                      <SelectItem key={patient.patient_code} value={patient.patient_code}>
+                        {patient.name} ({patient.patient_code}) · {patient.gender} · {patient.age} yrs
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                
+              </div>
               <div>
                 <Label htmlFor="patientName">Patient name</Label>
                 <Input id="patientName" value={report.patientName} onChange={(e) => handleFieldChange("patientName", e.target.value)} />
@@ -720,6 +861,78 @@ export default function EegTechnicianReport() {
           </div>
         </div>
       </div>
+      <Dialog open={isAddPatientModalOpen} onOpenChange={setIsAddPatientModalOpen}>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Add New Patient</DialogTitle>
+                  <DialogDescription>
+                    Enter the details for the new patient.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="new-name" className="text-right">
+                      Name
+                    </Label>
+                    <Input
+                      id="new-name"
+                      value={newPatient.name}
+                      onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })}
+                      className="col-span-3"
+                      placeholder="Full name"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="new-patient-code" className="text-right">
+                      Patient ID
+                    </Label>
+                    <Input
+                      id="new-patient-code"
+                      value={newPatient.patient_code}
+                      onChange={(e) => setNewPatient({ ...newPatient, patient_code: e.target.value })}
+                      className="col-span-3"
+                      placeholder="Unique patient code"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="new-age" className="text-right">
+                      Age
+                    </Label>
+                    <Input
+                      id="new-age"
+                      type="number"
+                      value={newPatient.age}
+                      onChange={(e) => setNewPatient({ ...newPatient, age: e.target.value })}
+                      className="col-span-3"
+                      placeholder="Age in years"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="new-gender" className="text-right">
+                      Gender
+                    </Label>
+                    <Select value={newPatient.gender} onValueChange={(value) => setNewPatient({ ...newPatient, gender: value })}>
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue placeholder="Select gender" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="M">Male</SelectItem>
+                        <SelectItem value="F">Female</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setIsAddPatientModalOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="button" onClick={handleAddPatient}>
+                    Add Patient
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
     </MainLayout>
   );
 }

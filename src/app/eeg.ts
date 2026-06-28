@@ -107,7 +107,7 @@ export async function processEEG(params: {
   formData.append("abnormal_findings", JSON.stringify(params.abnormalFindings ?? []));
   formData.append("regions", JSON.stringify(params.regions ?? []));
 
-  const res = await fetchWithAuth(`${API_BASE_URL}/api/v1/process-eeg`, {
+  const res = await fetchWithAuth(`${API_BASE_URL}/v1/process-eeg`, {
     method: "POST",
     body: formData,
   });
