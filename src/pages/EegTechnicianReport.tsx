@@ -42,18 +42,21 @@ import { processEEG } from "@/app/eeg";
 import { createPatient, getPatientsDb, type PatientPayload } from "@/app/patients";
 import { toast } from "@/hooks/use-toast";
 
-type StepId = 1 | 2 | 3 | 4 | 5 | 6;
+type StepId = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 interface PatientOption {
   patient_code: string;
   name: string;
   age: number;
   gender: string;
+  hospital?: string;
+  hospitalAddress?: string;
 }
 
 type ReportData = {
   file: File | null;
   patientName: string;
+  pid?: string;
   age: string;
   gender: string;
   handedness: string;
@@ -79,6 +82,8 @@ type ReportData = {
   normalFindings: string[];
   abnormalFindings: string[];
   regions: string[];
+  hospital: string;
+  hospitalAddress: string;
 };
 
 const steps = [
@@ -88,6 +93,7 @@ const steps = [
   { id: 4, title: "Background" },
   { id: 5, title: "Findings" },
   { id: 6, title: "Conclusion" },
+  { id: 7, title: "Review" },
 ] as const;
 
 const backgroundOptions = [
@@ -148,6 +154,8 @@ export default function EegTechnicianReport() {
     age: "",
     gender: "",
     patient_code: "",
+    hospital: "",
+    hospitalAddress: "",
   });
   const [report, setReport] = useState<ReportData>({
     file: null,
@@ -177,6 +185,8 @@ export default function EegTechnicianReport() {
     normalFindings: ["No epileptiform discharges"],
     abnormalFindings: [],
     regions: ["Bilateral"],
+    hospital: "",
+    hospitalAddress: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -233,15 +243,17 @@ export default function EegTechnicianReport() {
         age: String(patient.age),
         pid:patient.patient_code,
         gender: patient.gender,
+        hospital: patient.hospital || "",
+        hospitalAddress: patient.hospitalAddress || "",
       }));
     }
   };
 
   const handleAddPatient = async () => {
-    if (!newPatient.name || !newPatient.age || !newPatient.gender || !newPatient.patient_code) {
+    if (!newPatient.name || !newPatient.age || !newPatient.gender || !newPatient.patient_code || !newPatient.hospital || !newPatient.hospitalAddress) {
       toast({
         title: "Missing Information",
-        description: "Please fill in all required patient fields.",
+        description: "Please fill in all required fields including hospital name and address.",
         variant: "destructive",
       });
       return;
@@ -254,6 +266,8 @@ export default function EegTechnicianReport() {
         name: newPatient.name,
         age: Number(newPatient.age),
         gender: newPatient.gender,
+        hospital: newPatient.hospital,
+        hospitalAddress: newPatient.hospitalAddress,
       };
 
       await createPatient(payload);
@@ -267,9 +281,11 @@ export default function EegTechnicianReport() {
         patientName: newPatient.name,
         age: newPatient.age,
         gender: newPatient.gender,
+        hospital: newPatient.hospital,
+        hospitalAddress: newPatient.hospitalAddress,
       }));
       setIsAddPatientModalOpen(false);
-      setNewPatient({ name: "", age: "", gender: "", patient_code: "" });
+      setNewPatient({ name: "", age: "", gender: "", patient_code: "", hospital: "", hospitalAddress: "" });
 
       toast({
         title: "Patient Added",
@@ -299,12 +315,22 @@ export default function EegTechnicianReport() {
       return;
     }
 
-    // const pid = report.neuroNo || report.uhid;
-    // if (!pid) {
-    //   setSubmitError("Patient ID is required for final submission.");
-    //   toast({ title: "Submit failed", description: "Enter Neuro No. or UHID before submitting.", variant: "destructive" });
-    //   return;
-    // }
+    if (!report.patientName) {
+      setSubmitError("Patient name is required for final submission.");
+      toast({ title: "Submit failed", description: "Enter the patient's full name before submitting.", variant: "destructive" });
+      return;
+    }
+
+    setSubmitError(null);
+    setCurrentStep(7);
+  };
+
+  const handleFinalSubmit = async () => {
+    if (!report.file) {
+      setSubmitError("Please upload an EDF file before submitting.");
+      toast({ title: "Submit failed", description: "No EEG file selected.", variant: "destructive" });
+      return;
+    }
 
     if (!report.patientName) {
       setSubmitError("Patient name is required for final submission.");
@@ -522,6 +548,14 @@ export default function EegTechnicianReport() {
                 <Label htmlFor="doctor">Doctor</Label>
                 <Input id="doctor" value={report.doctor} onChange={(e) => handleFieldChange("doctor", e.target.value)} />
               </div>
+              <div>
+                <Label htmlFor="hospital">Hospital *</Label>
+                <Input id="hospital" value={report.hospital} onChange={(e) => handleFieldChange("hospital", e.target.value)} />
+              </div>
+              <div>
+                <Label htmlFor="hospitalAddress">Hospital Address *</Label>
+                <Input id="hospitalAddress" value={report.hospitalAddress} onChange={(e) => handleFieldChange("hospitalAddress", e.target.value)} />
+              </div>
             </div>
           </div>
         );
@@ -725,6 +759,92 @@ export default function EegTechnicianReport() {
             </div>
           </div>
         );
+      case 7:
+        return (
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+              <div className="flex items-center gap-2 text-sm font-medium text-primary">
+                <FileText className="h-4 w-4" />
+                Review Report Before Submission
+              </div>
+            </div>
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="space-y-4">
+                <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Patient Information</p>
+                  <div className="mt-3 space-y-2 text-sm">
+                    <div><span className="font-medium">Name:</span> {report.patientName || "—"}</div>
+                    <div><span className="font-medium">Age:</span> {report.age || "—"}</div>
+                    <div><span className="font-medium">Gender:</span> {report.gender || "—"}</div>
+                    <div><span className="font-medium">Handedness:</span> {report.handedness || "—"}</div>
+                    <div><span className="font-medium">Hospital:</span> {report.hospital || "—"}</div>
+                    <div><span className="font-medium">Hospital Address:</span> {report.hospitalAddress || "—"}</div>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Neuro Details</p>
+                  <div className="mt-3 space-y-2 text-sm">
+                    <div><span className="font-medium">Neuro No.:</span> {report.neuroNo || "—"}</div>\n                    <div><span className="font-medium">UHID/Unit:</span> {report.uhid || "—"}</div>
+                    <div><span className="font-medium">EEG No.:</span> {report.eegNo || "—"}</div>
+                    <div><span className="font-medium">Doctor:</span> {report.doctor || "—"}</div>
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Recording Details</p>
+                  <div className="mt-3 space-y-2 text-sm">
+                    <div><span className="font-medium">Date/Time:</span> {report.dateTime || "—"}</div>
+                    <div><span className="font-medium">Record Type:</span> {report.recordType || "—"}</div>
+                    <div><span className="font-medium">Technician:</span> {report.technician || "—"}</div>
+                    <div><span className="font-medium">Resident:</span> {report.resident || "—"}</div>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Clinical Status</p>
+                  <div className="mt-3 space-y-2 text-sm">
+                    <div><span className="font-medium">Sensorium:</span> {report.sensorium || "—"}</div>
+                    <div><span className="font-medium">Sedation:</span> {report.sedation || "—"}</div>
+                    <div><span className="font-medium">Medications:</span> {report.medications || "—"}</div>
+                    <div><span className="font-medium">Diagnosis:</span> {report.diagnosis || "—"}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Clinical History</p>
+                <div className="mt-3 space-y-2 text-sm">
+                  <div><span className="font-medium">Last Attack:</span> {report.lastAttack || "—"}</div>
+                  <div><span className="font-medium">Last Meal:</span> {report.lastMeal || "—"}</div>
+                </div>
+              </div>
+              <div className="rounded-xl border border-emerald-600/30 bg-emerald-50 p-4">
+                <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">EEG Background</p>
+                <p className="mt-2 text-sm text-muted-foreground">{report.backgroundText || "—"}</p>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Findings</p>
+                <div className="mt-3 space-y-2 text-sm">
+                  <div><span className="font-medium">Normal:</span> {report.normalFindings.join(", ") || "—"}</div>
+                  <div><span className="font-medium">Abnormal:</span> {report.abnormalFindings.join(", ") || "—"}</div>
+                  <div><span className="font-medium">Regions:</span> {report.regions.join(", ") || "—"}</div>
+                  <div><span className="font-medium">Details:</span> {report.findingsDetail || "—"}</div>
+                  <div><span className="font-medium">Sleep:</span> {report.sleepDetail || "—"}</div>
+                </div>
+              </div>
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                <p className="text-xs font-semibold text-primary uppercase tracking-wide">Conclusion</p>
+                <p className="mt-2 text-sm text-muted-foreground">{report.conclusion || "—"}</p>
+                <p className="mt-2 text-sm text-muted-foreground"><span className="font-medium">Correlate:</span> {report.correlate || "—"}</p>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm font-medium text-amber-900">Review Complete</p>
+              <p className="mt-1 text-sm text-amber-800">Please verify all information above before final submission. Click \"Submit Report\" to proceed.</p>
+            </div>
+          </div>
+        );
       default:
         return null;
     }
@@ -798,10 +918,15 @@ export default function EegTechnicianReport() {
                     <ArrowLeft className="h-4 w-4" />
                     Back
                   </Button>
-                  {currentStep === steps.length ? (
-                    <Button className="gap-2" onClick={handleSubmitReport} disabled={isSubmitting}>
+                  {currentStep === 7 ? (
+                    <Button className="gap-2" onClick={handleFinalSubmit} disabled={isSubmitting}>
                       <FileText className="h-4 w-4" />
                       {isSubmitting ? "Submitting..." : "Submit report"}
+                    </Button>
+                  ) : currentStep === 6 ? (
+                    <Button className="gap-2" onClick={handleSubmitReport} disabled={!report.file || !report.patientName}>
+                      Review
+                      <ArrowRight className="h-4 w-4" />
                     </Button>
                   ) : (
                     <Button className="gap-2" onClick={goNext} disabled={currentStep === 1 && !report.file}>
@@ -921,6 +1046,30 @@ export default function EegTechnicianReport() {
                         <SelectItem value="Other">Other</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="new-hospital" className="text-right">
+                      Hospital *
+                    </Label>
+                    <Input
+                      id="new-hospital"
+                      value={newPatient.hospital}
+                      onChange={(e) => setNewPatient({ ...newPatient, hospital: e.target.value })}
+                      className="col-span-3"
+                      placeholder="Hospital name"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="new-hospital-address" className="text-right">
+                      Hospital Address *
+                    </Label>
+                    <Input
+                      id="new-hospital-address"
+                      value={newPatient.hospitalAddress}
+                      onChange={(e) => setNewPatient({ ...newPatient, hospitalAddress: e.target.value })}
+                      className="col-span-3"
+                      placeholder="Full hospital address"
+                    />
                   </div>
                 </div>
                 <DialogFooter>

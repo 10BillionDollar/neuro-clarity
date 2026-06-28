@@ -27,6 +27,8 @@ export interface ReportData {
   normalFindings?: string[];
   abnormalFindings?: string[];
   regions?: string[];
+  hospital?: string;
+  hospitalAddress?: string;
 }
 
 export interface ProcessedData {
@@ -109,8 +111,8 @@ function openHtmlExport(
   <body>
     <div class="rp-page">
       <div class="rp-inst">
-        <div class="rp-inst-name">NATIONAL INSTITUTE OF MENTAL HEALTH AND NEURO SCIENCES</div>
-        <div class="rp-inst-sub">Bangalore, KA, 560029, India</div>
+        <div class="rp-inst-name">${escapeHtml(dash(reportData.hospital))}</div>
+        <div class="rp-inst-sub">${escapeHtml(dash(reportData.hospitalAddress))}</div>
       </div>
       <div class="rp-dept">Department of Neurology</div>
       <div class="rp-title">Scalp EEG Report</div>
@@ -121,7 +123,7 @@ function openHtmlExport(
         <tr><td>Recording Date</td><td>${escapeHtml(dash(reportData.dateTime))}</td><td>EEG No</td><td>${escapeHtml(dash(reportData.eegNo))}</td></tr>
         <tr><td>Handedness</td><td>${escapeHtml(dash(reportData.handedness))}</td><td>UHID / Unit</td><td>${escapeHtml(dash(reportData.uhid))}</td></tr>
         <tr><td>Last Attack</td><td>${escapeHtml(dash(reportData.lastAttack))}</td><td>Last Meal</td><td>${escapeHtml(dash(reportData.lastMeal))}</td></tr>
-        <tr><td>Doctor</td><td>${escapeHtml(dash(reportData.doctor))}</td><td>Technician</td><td>${escapeHtml(dash(reportData.technician))}</td></tr>
+        <tr><td>Doctor</td><td>${escapeHtml(dash(reportData.doctor))}</td><td>Hospital</td><td>${escapeHtml(dash(reportData.hospital))}</td></tr>
       </table>
 
       <div class="rp-body"><span class="rp-lbl">Instrument:</span> Galileo Mizar 40 Channel Digital EEG System</div>
