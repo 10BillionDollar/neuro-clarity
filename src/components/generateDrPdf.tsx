@@ -17,8 +17,16 @@ export interface ReportData {
   diagnosis?: string;
   doctor?: string;
   technician?: string;
+  resident?: string;
+  recordType?: string;
   backgroundText?: string;
   conclusion?: string;
+  findingsDetail?: string;
+  sleepDetail?: string;
+  correlate?: string;
+  normalFindings?: string[];
+  abnormalFindings?: string[];
+  regions?: string[];
 }
 
 export interface ProcessedData {
@@ -42,6 +50,11 @@ function escapeHtml(value: string): string {
     .replace(/>/g, "&gt;")
     .replace(/\"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function formatList(values?: string[]): string {
+  const items = (values || []).filter(Boolean);
+  return items.length ? items.join(", ") : "—";
 }
 
 // ─────────────────────────────────────────────
@@ -112,11 +125,21 @@ function openHtmlExport(
       </table>
 
       <div class="rp-body"><span class="rp-lbl">Instrument:</span> Galileo Mizar 40 Channel Digital EEG System</div>
+      <div class="rp-body"><span class="rp-lbl">Record Type:</span> ${escapeHtml(dash(reportData.recordType))}</div>
+      <div class="rp-body"><span class="rp-lbl">Resident:</span> ${escapeHtml(dash(reportData.resident))}</div>
       <div class="rp-hr"></div>
       <div class="rp-body"><span class="rp-lbl">Level of Sensorium:</span> ${escapeHtml(dash(reportData.sensorium))}</div>
       <div class="rp-body"><span class="rp-lbl">Sedation:</span> ${escapeHtml(dash(reportData.sedation))}</div>
       <div class="rp-body"><span class="rp-lbl">Medications:</span> ${escapeHtml(dash(reportData.medications))}</div>
       <div class="rp-body"><span class="rp-lbl">Diagnosis:</span> ${escapeHtml(dash(reportData.diagnosis))}</div>
+      <div class="rp-hr"></div>
+      <div class="rp-lbl">Findings Detail</div>
+      <div class="rp-body">${escapeHtml(dash(reportData.findingsDetail))}</div>
+      <div class="rp-body"><span class="rp-lbl">Sleep Detail:</span> ${escapeHtml(dash(reportData.sleepDetail))}</div>
+      <div class="rp-body"><span class="rp-lbl">Normal Findings:</span> ${escapeHtml(formatList(reportData.normalFindings))}</div>
+      <div class="rp-body"><span class="rp-lbl">Abnormal Findings:</span> ${escapeHtml(formatList(reportData.abnormalFindings))}</div>
+      <div class="rp-body"><span class="rp-lbl">Regions:</span> ${escapeHtml(formatList(reportData.regions))}</div>
+      <div class="rp-body"><span class="rp-lbl">Correlate:</span> ${escapeHtml(dash(reportData.correlate))}</div>
       <div class="rp-hr"></div>
       <div class="rp-lbl">Factual Report</div>
       <div class="rp-body">${escapeHtml(factualText)}</div>
