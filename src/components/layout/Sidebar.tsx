@@ -12,6 +12,7 @@ import {
   Menu,
   X,
   ChevronDown,
+  Brain,
 } from "lucide-react";
 
 const navigation = [
@@ -27,6 +28,7 @@ const navigation = [
       { name: "Technician Report", href: "/eeg-technician-report", icon: FileText },
     ],
   },
+  { name: "Neuro Intake", href: "/neuro-intake", icon: Brain },
   { name: "Longitudinal", href: "/longitudinal", icon: TrendingUp },
   { name: "Model Evidence", href: "/evidence", icon: Shield },
   { name: "Settings", href: "/settings", icon: Settings },

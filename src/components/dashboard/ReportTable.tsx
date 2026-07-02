@@ -364,7 +364,6 @@ export function ReportTable({ patients, selectedPatientId, onEditPatient, onDele
           />
         </div>
       </div>
-
         <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30">

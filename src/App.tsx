@@ -21,6 +21,7 @@ import PatientHistory from "./pages/PatientHistory";
 import ReportSummary from "./pages/ReportSummary";
 import EEGScanReport from "./components/eegscanReport";
 import EegTechnicianReport from "./pages/EegTechnicianReport";
+import NeuroIntake from "./pages/NeuroIntake";
 
 const queryClient = new QueryClient();
 
@@ -79,6 +80,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <EegTechnicianReport />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/neuro-intake"
+              element={
+                <ProtectedRoute>
+                  <NeuroIntake />
                 </ProtectedRoute>
               }
             />
